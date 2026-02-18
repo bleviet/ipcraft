@@ -18,7 +18,10 @@ from ipcraft.parser.hdl.vhdl_ai_parser import ParserConfig, VHDLAiParser
 @pytest.fixture
 def test_vhdl_dir():
     """Get the test VHDL directory path."""
-    return Path(__file__).parent.parent.parent / "examples" / "test_vhdl"
+    path = Path(__file__).parent.parent.parent / "examples" / "test_vhdl"
+    if not path.exists():
+        pytest.skip(f"Test VHDL directory not found: {path}")
+    return path
 
 
 @pytest.fixture

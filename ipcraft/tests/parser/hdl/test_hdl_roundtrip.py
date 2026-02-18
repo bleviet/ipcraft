@@ -16,6 +16,9 @@ from ipcraft.generator.hdl.ipcore_project_generator import IpCoreProjectGenerato
 from ipcraft.model import IpCore, Parameter, Port, PortDirection
 from ipcraft.parser.hdl.vhdl_parser import VHDLParser
 
+# Check if neorv32 files exist
+NEORV32_FILES = glob.glob(os.path.join(os.path.dirname(__file__), "../resources/vhdl/neorv32_core/*.vhd"))
+
 
 class TestHDLRoundtrip:
     """Test cases for HDL roundtrip: parse -> generate -> compare."""
@@ -114,9 +117,10 @@ end architecture behavioral;
         assert "count : out std_logic_vector(7 downto 0)" in norm_generated
         assert "end entity counter" in norm_generated
 
+    @pytest.mark.skipif(not NEORV32_FILES, reason="NEORV32 VHDL files not found in resources")
     @pytest.mark.parametrize(
         "vhdl_file",
-        glob.glob(os.path.join(os.path.dirname(__file__), "../resources/vhdl/neorv32_core/*.vhd")),
+        NEORV32_FILES,
     )
     def test_neorv32_vhdl_files(self, vhdl_file):
         """Test parsing and validating all VHDL files in the neorv32_core directory."""
