@@ -17,6 +17,9 @@ dependencies = [
     "ipcraft-spec",
 ]
 
+[tool.uv.sources]
+ipcraft-spec = { path = "ipcraft-spec", editable = true }
+
 [project.scripts]
 ipcraft = "ipcraft.cli:main"
 
