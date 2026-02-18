@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ipcraft"
+version = "0.1.0"
+description = "A Python library for IP Core development and VHDL generation"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "jinja2",
+    "rich",
+    "pydantic",
+    "pyyaml",
+    "click",
+    "ipcraft-spec",
+]
+
+[project.scripts]
+ipcraft = "ipcraft.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ipcraft"]

@@ -1,0 +1,94 @@
+# VS Code
+.vscode/
+.history/
+
+# Node/VS Code extension
+node_modules/
+dist/
+build/
+*.vsix
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg-info/
+build/
+dist/
+.eggs/
+*.egg
+*.manifest
+*.spec
+*.log
+.cache/
+.tox/
+.coverage*
+htmlcov/
+.mypy_cache/
+.pytest_cache/
+
+# TUI/GUI
+*.sqlite3
+*.db
+*.log
+*.bak
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+.env
+.env.*
+*.swp
+*.swo
+.idea/
+*.iml
+*.orig
+
+# Test outputs
+coverage.xml
+*.mocha.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editor backups
+*~
+*.bak
+*.tmp
+
+# Ignore local dev scripts
+*.local.sh
+
+# Xilinx Vivado generated files
+*.jou
+*.log
+*.str
+*.backup.log
+*.backup.jou
+.Xil/
+vivado_pid*.str
+vivado*.backup.*
+
+
+--output-dir/
+debug_build/
+sim_build/
+results.xml
+*.ghw
+*.vcd
+
+# Generated IP core outputs (regeneratable)
+ipcraft-spec/examples/*/my_timer_core/
+ipcraft-spec/examples/**/rtl/
+ipcraft-spec/examples/**/intel/
+ipcraft-spec/examples/**/xilinx/
+ipcraft-spec/examples/**/tb/
