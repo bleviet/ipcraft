@@ -1,8 +1,8 @@
 # IPCraft -- Improvement Plan (Updated)
 
 > **Based on:** [review.md](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/review.md)
-> **Date:** 2026-02-21 (completed)
-> **Status:** 19/19 original tasks completed. 3 new minor items completed.
+> **Date:** 2026-02-21 (final update)
+> **Status:** All 21 review findings resolved. 3 minor polish items remain.
 
 ---
 
@@ -16,9 +16,11 @@
 | 1.4 | Extract Generic List Parser | `ip_yaml_parser.py` |
 | 2.1 | Fix CLI Naming (`ipcore` -> `ipcraft`) | `cli.py` |
 | 2.2 | Move `_filter_none` to `utils/` | `utils/__init__.py`, `ip_yaml_parser.py` |
+| 2.3 | Add Mixin Typing Protocols | `_protocols.py`, `protocols.py`, `testbench_generator.py`, `vendor_generator.py`, `memory_map_parser.py` |
 | 2.4 | Clean Up Empty/Placeholder Modules | `converter/` directory removed |
 | 2.5 | Standardize on `pathlib.Path` | `cli.py` |
 | 2.6 | Remove Over-Defensive `getattr` Chains | `ipcore_project_generator.py` |
+| 2.7 | Add `BusIOError` Exception | `register.py`, `runtime/__init__.py` |
 | 2.8 | Clean Up Unused Imports in `vhdl_parser.py` | `vhdl_parser.py` |
 | 2.9 | Move `test_vhdl_ai_parser.py` | `tests/parser/hdl/test_vhdl_ai_parser.py` |
 | 2.10 | Fix `VhdlLlmParser` Path Hardcoding | `vhdl_ai_parser.py` |
@@ -27,317 +29,120 @@
 | 3.3 | Cache `AddressBlock.end_address` | `memory_map.py` |
 | 3.4 | Add Deprecation Warnings to Legacy Aliases | `ipcore_project_generator.py` |
 | 3.5 | Remove No-Op `_process_port_list` | `vhdl_parser.py` |
+| 3.6 | Add `__version__` to `ipcraft/__init__.py` | `__init__.py` |
+| 3.7 | Fix Stale `hasattr` in Test Roundtrip | `test_hdl_roundtrip.py` |
 
 ---
 
-## Recently Completed Tasks
+## Remaining Tasks
 
 ---
 
-### Task A -- Add Mixin Typing Protocols (Medium Priority)
+### Task A -- Remove Unnecessary `hasattr` Guard in `vendor_generator.py` (Low Priority)
 
-**Context:** Mixins call methods defined on sibling classes without type contracts. IDE refactoring is unreliable and `mypy` cannot verify cross-mixin method calls.
+**Context:** `IpCore.description` is a Pydantic field with `default=""`. It always exists on valid `IpCore` instances. The `hasattr` check is dead code that obscures the intent.
 
 **Affected Files:**
-- [NEW] `ipcraft/generator/hdl/_protocols.py`
-- [NEW] `ipcraft/parser/yaml/_protocols.py`
-- [MODIFY] [testbench_generator.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/generator/hdl/testbench_generator.py)
 - [MODIFY] [vendor_generator.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/generator/hdl/vendor_generator.py)
-- [MODIFY] [fileset_manager.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/generator/hdl/fileset_manager.py)
-- [MODIFY] [memory_map_parser.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/parser/yaml/memory_map_parser.py)
-- [MODIFY] [fileset_parser.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/parser/yaml/fileset_parser.py)
 
-#### Step 1: Create generator protocol
+#### Implementation
 
-```python
-# NEW FILE: ipcraft/generator/hdl/_protocols.py
+```diff
+ # Line 22-24 (generate_intel_hw_tcl):
+-        context["description"] = (
+-            ip_core.description if hasattr(ip_core, "description") else ""
+-        )
++        context["description"] = ip_core.description
 
-from __future__ import annotations
-from typing import Any, Dict, Protocol
-
-from jinja2 import Environment
-
-from ipcraft.model.core import IpCore
-
-
-class GeneratorHost(Protocol):
-    """Protocol for the host class that generator mixins expect."""
-
-    env: Environment
-
-    def _get_template_context(
-        self, ip_core: IpCore, bus_type: str = "axil"
-    ) -> Dict[str, Any]: ...
+ # Line 36-38 (generate_xilinx_component_xml):
+-        context["description"] = (
+-            ip_core.description if hasattr(ip_core, "description") else ""
+-        )
++        context["description"] = ip_core.description
 ```
 
-#### Step 2: Create parser protocol
+#### Validation
+
+```bash
+/home/linuxbrew/.linuxbrew/bin/uv run pytest -v ipcraft/tests/
+/home/linuxbrew/.linuxbrew/bin/uv run flake8 ipcraft/generator/hdl/vendor_generator.py
+```
+
+---
+
+### Task B -- Fix Changelog Exception Name (Low Priority)
+
+**Context:** `docs/changelog.md` line 16 references `BusLibraryError` but the actual exception class is `BusIOError`.
+
+**Affected Files:**
+- [MODIFY] [changelog.md](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/docs/changelog.md)
+
+#### Implementation
+
+```diff
+ # Line 16:
+-- Add specific exceptions for Bus I/O errors (`BusLibraryError`)
++- Add specific exceptions for Bus I/O errors (`BusIOError`)
+```
+
+---
+
+### Task C -- Configurable Register Width in `register.py` (Enhancement, Low Priority)
+
+**Context:** `BitField.__post_init__` hardcodes a 32-bit width limit. This prevents support for 64-bit registers which are common in high-speed interfaces (PCIe, AXI4-Full).
+
+**Affected Files:**
+- [MODIFY] [register.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/runtime/register.py)
+
+#### Implementation
+
+Replace the hardcoded `32` with a class-level constant:
 
 ```python
-# NEW FILE: ipcraft/parser/yaml/_protocols.py
+# register.py -- add class constant after docstring:
+@dataclass
+class BitField:
+    """Represents a single bit field within a register."""
 
-from __future__ import annotations
-from typing import Any, Dict, Protocol
+    MAX_REGISTER_WIDTH: ClassVar[int] = 64
 
+    name: str
+    offset: int
+    width: int
+    access: str = "rw"
+    description: str = ""
+    reset_value: Optional[int] = None
 
-class ParserHost(Protocol):
-    """Protocol for the host class that parser mixins expect."""
+    def __post_init__(self):
+        """Validate bit field parameters."""
+        # ... existing access validation ...
 
-    @staticmethod
-    def _parse_access(access: Any) -> Any: ...
+        if self.width <= 0:
+            raise ValueError(f"Bit field '{self.name}' width must be positive")
+        if self.width > self.MAX_REGISTER_WIDTH:
+            raise ValueError(
+                f"Bit field '{self.name}' width cannot exceed "
+                f"{self.MAX_REGISTER_WIDTH} bits"
+            )
+        if self.offset < 0:
+            raise ValueError(
+                f"Bit field '{self.name}' offset must be non-negative"
+            )
+        if self.offset + self.width > self.MAX_REGISTER_WIDTH:
+            raise ValueError(
+                f"Bit field '{self.name}' extends beyond "
+                f"{self.MAX_REGISTER_WIDTH}-bit register boundary"
+            )
 ```
 
 > [!NOTE]
-> `_filter_none` was moved to `utils/` and is now imported directly as `filter_none()`.
-> The mixins import it from `ipcraft.utils`, so the protocol does NOT need to include it.
-
-#### Step 3: Type-hint `self` in mixin methods
-
-```python
-# In testbench_generator.py:
-from __future__ import annotations
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ._protocols import GeneratorHost
-
-class TestbenchGenerationMixin:
-    def generate_cocotb_test(
-        self: GeneratorHost, ip_core: IpCore, bus_type: str = "axil"
-    ) -> str:
-        template = self.env.get_template("cocotb_test.py.j2")
-        context = self._get_template_context(ip_core, bus_type)
-        return template.render(**context)
-```
-
-Apply the same pattern to `VendorGenerationMixin` and `FileSetManagerMixin`.
-
-For parser mixins (`MemoryMapParserMixin`, `FileSetParserMixin`), type-hint `self: ParserHost` on methods that call `self._parse_access()`.
+> This requires adding `from typing import ClassVar` to the imports.
 
 #### Validation
 
 ```bash
-# Run mypy to verify protocols catch real errors:
-uv run mypy ipcraft/generator/hdl/ ipcraft/parser/yaml/
-```
-
----
-
-### Task B -- Add `BusIOError` Exception (Medium Priority)
-
-**Context:** `register.py` catches bare `Exception` in 3 RMW locations (lines 316, 342, 396). This can hide programming errors (e.g., `TypeError`, `AttributeError`).
-
-**Affected Files:**
-- [MODIFY] [register.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/runtime/register.py) -- Define `BusIOError`, update catch blocks
-- [MODIFY] `ipcraft/runtime/__init__.py` -- Export `BusIOError`
-
-#### Step 1: Define exception class
-
-```python
-# In runtime/register.py -- add at module level (after imports):
-
-class BusIOError(IOError):
-    """Raised when a bus read/write operation fails.
-
-    Bus interface implementations should raise this when
-    a hardware read or write operation fails (timeout, NACK, etc.).
-    """
-```
-
-#### Step 2: Update docstrings on abstract bus interfaces
-
-```python
-# In AbstractBusInterface.read_word docstring, add:
-#     Raises:
-#         BusIOError: If the bus operation fails.
-
-# Same for AbstractBusInterface.write_word, AsyncBusInterface.read_word,
-# AsyncBusInterface.write_word.
-```
-
-#### Step 3: Replace catch blocks (3 locations)
-
-```python
-# Lines 314-321 (Register.write_field):
-        try:
-            current_reg_val = self.read()
-        except BusIOError as exc:
-            logger.warning(
-                "Failed to read register '%s' during RMW: %s; "
-                "proceeding with current_value=0",
-                self.name,
-                exc,
-            )
-
-# Lines 339-347 (Register.write_multiple_fields):
-        try:
-            current_reg_val = self.read()
-        except BusIOError as exc:
-            logger.warning(
-                "Failed to read register '%s' during RMW: %s; "
-                "proceeding with current_value=0",
-                self.name,
-                exc,
-            )
-
-# Lines 393-401 (AsyncRegister.write_field):
-        try:
-            current_reg_val = await self.read()
-        except BusIOError as exc:
-            logger.warning(
-                "Failed to read register '%s' during async RMW: %s; "
-                "proceeding with current_value=0",
-                self.name,
-                exc,
-            )
-```
-
-#### Step 4: Export from `runtime/__init__.py`
-
-```python
-# In ipcraft/runtime/__init__.py add:
-from ipcraft.runtime.register import BusIOError
-```
-
-#### Validation and Tests
-
-```python
-# tests/core/test_bus_io_error.py
-
-import logging
-import pytest
-from ipcraft.runtime.register import (
-    AbstractBusInterface, BitField, BusIOError, Register,
-)
-
-
-class FailingBus(AbstractBusInterface):
-    """Bus that raises BusIOError on read."""
-    def read_word(self, address: int) -> int:
-        raise BusIOError("bus timeout")
-    def write_word(self, address: int, data: int) -> None:
-        pass
-
-
-class TestRMWWithBusError:
-    def test_write_field_logs_warning_on_bus_error(self, caplog):
-        fields = [BitField(name="ENABLE", offset=0, width=1, access="rw")]
-        reg = Register("CTRL", 0x00, FailingBus(), fields)
-
-        with caplog.at_level(logging.WARNING):
-            reg.write_field("ENABLE", 1)
-
-        assert "bus timeout" in caplog.text
-
-    def test_bus_io_error_is_ioerror(self):
-        assert issubclass(BusIOError, IOError)
-
-    def test_programming_errors_propagate(self):
-        """Non-BusIOError exceptions should NOT be caught."""
-        class BrokenBus(AbstractBusInterface):
-            def read_word(self, address: int) -> int:
-                raise TypeError("this is a bug")
-            def write_word(self, address: int, data: int) -> None:
-                pass
-
-        fields = [BitField(name="ENABLE", offset=0, width=1, access="rw")]
-        reg = Register("CTRL", 0x00, BrokenBus(), fields)
-        with pytest.raises(TypeError, match="this is a bug"):
-            reg.write_field("ENABLE", 1)
-```
-
----
-
-### Task C -- Add `__version__` to `ipcraft/__init__.py` (Low Priority)
-
-**Affected Files:**
-- [MODIFY] [\_\_init\_\_.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/__init__.py)
-
-#### Implementation
-
-```python
-# ipcraft/__init__.py
-"""IPCraft -- Python library for IP Core development and VHDL generation."""
-
-__version__ = "0.1.0"
-```
-
-#### Validation
-
-```python
-# tests/test_package_init.py
-def test_version_exported():
-    import ipcraft
-    assert hasattr(ipcraft, "__version__")
-    assert ipcraft.__version__ == "0.1.0"
-```
-
----
-
-## Minor Cleanup Tasks
-
----
-
-### Task D -- Remove Unused Imports in `verilog_parser.py`
-
-**Affected Files:**
-- [MODIFY] [verilog_parser.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/parser/hdl/verilog_parser.py)
-
-#### Implementation
-
-Remove `LineEnd` and `delimitedList` from the pyparsing import block (lines 13, 25).
-
-```diff
- from pyparsing import (
-     CaselessKeyword,
-     CaselessLiteral,
-     Group,
--    LineEnd,
-     ParseBaseException,
- )
- from pyparsing import Optional as Opt
- from pyparsing import (
-     ParserElement,
-     SkipTo,
-     Suppress,
-     Word,
-     ZeroOrMore,
-     alphanums,
-     alphas,
--    delimitedList,
-     nums,
-     oneOf,
- )
-```
-
-#### Validation
-
-```bash
-uv run flake8 ipcraft/parser/hdl/verilog_parser.py --select F401
-# Expected: no output
-```
-
----
-
-### Task E -- Fix Stale `hasattr` Pattern in Test
-
-**Affected Files:**
-- [MODIFY] [test_hdl_roundtrip.py](file:///wsl.localhost/Ubuntu/home/balevision/workspace/bleviet/ipcraft/ipcraft/tests/parser/hdl/test_hdl_roundtrip.py)
-
-#### Implementation
-
-```python
-# Line 224 -- BEFORE:
-if hasattr(port.direction, "value")
-
-# AFTER:
-from ipcraft.utils import enum_value
-# ... then use enum_value(port.direction) where needed
-```
-
-#### Validation
-
-```bash
-uv run pytest ipcraft/tests/parser/hdl/test_hdl_roundtrip.py -v
+/home/linuxbrew/.linuxbrew/bin/uv run pytest -v ipcraft/tests/core/
+/home/linuxbrew/.linuxbrew/bin/uv run flake8 ipcraft/runtime/register.py
 ```
 
 ---
@@ -348,17 +153,16 @@ After all remaining tasks are complete:
 
 ```bash
 # Full test suite
-uv run pytest -v
+/home/linuxbrew/.linuxbrew/bin/uv run pytest -v
 
 # Lint
-uv run flake8 ipcraft
+/home/linuxbrew/.linuxbrew/bin/uv run flake8 ipcraft/
 
 # Type checking
-uv run mypy ipcraft
+/home/linuxbrew/.linuxbrew/bin/uv run mypy ipcraft/
 
 # Grep checks
-grep -r "except Exception" ipcraft/runtime/register.py  # Should find 0 hits
-grep -r "hasattr.*value" ipcraft/ --include="*.py"       # Should find 0 non-docstring hits
+grep -rn 'hasattr.*description' ipcraft/generator/  # Should find 0 hits
 ```
 
 ### Acceptance Criteria
@@ -367,7 +171,6 @@ grep -r "hasattr.*value" ipcraft/ --include="*.py"       # Should find 0 non-doc
 |-------|--------|
 | All existing tests pass | Required |
 | No new flake8 warnings | Required |
-| `mypy` passes with mixin protocols | Required |
-| `grep -r "except Exception" ipcraft/runtime/register.py` returns 0 hits | Required |
-| `grep -r "hasattr.*value" ipcraft/` returns 0 non-docstring hits | Required |
-| `ipcraft.__version__` is accessible | Required |
+| `mypy` passes | Required |
+| `grep -rn 'hasattr.*description' ipcraft/generator/` returns 0 hits | Required (Task A) |
+| `docs/changelog.md` references `BusIOError` | Required (Task B) |

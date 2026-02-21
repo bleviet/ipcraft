@@ -13,7 +13,7 @@
 - Clean up empty/placeholder modules (`converter/` directory destroyed)
 - Standardize on `pathlib.Path` over `os.path`
 - Remove over-defensive `getattr` chains in Generator
-- Add specific exceptions for Bus I/O errors (`BusLibraryError`)
+- Add specific exceptions for Bus I/O errors (`BusIOError`)
 - Clean up unused imports in HDL parsers (pyparsing cleanup)
 - Relocated `test_vhdl_ai_parser.py` into correct directory `tests/parser/hdl/`
 - Fix `VhdlLlmParser` path hardcoding (uses `LLM_CORE_PATH` environment variable)

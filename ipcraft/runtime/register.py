@@ -11,7 +11,7 @@ import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, ClassVar, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,8 @@ class BitField:
     """
     Represents a bit field within a register.
     """
+
+    MAX_REGISTER_WIDTH: ClassVar[int] = 64
 
     name: str
     offset: int
@@ -76,13 +78,17 @@ class BitField:
 
         if self.width <= 0:
             raise ValueError(f"Bit field '{self.name}' width must be positive")
-        if self.width > 32:
-            raise ValueError(f"Bit field '{self.name}' width cannot exceed 32 bits")
+        if self.width > self.MAX_REGISTER_WIDTH:
+            raise ValueError(
+                f"Bit field '{self.name}' width cannot exceed "
+                f"{self.MAX_REGISTER_WIDTH} bits"
+            )
         if self.offset < 0:
             raise ValueError(f"Bit field '{self.name}' offset must be non-negative")
-        if self.offset + self.width > 32:
+        if self.offset + self.width > self.MAX_REGISTER_WIDTH:
             raise ValueError(
-                f"Bit field '{self.name}' extends beyond 32-bit register boundary"
+                f"Bit field '{self.name}' extends beyond "
+                f"{self.MAX_REGISTER_WIDTH}-bit register boundary"
             )
 
     def insert_value(self, register_value: int, field_value: int) -> int:
