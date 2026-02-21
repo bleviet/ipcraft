@@ -1,9 +1,3 @@
-"""Tests for VHDL generator."""
-
-from pathlib import Path
-
-import pytest
-
 from ipcraft.generator.hdl.ipcore_project_generator import IpCoreProjectGenerator
 from ipcraft.model.base import VLNV
 from ipcraft.model.core import IpCore
@@ -15,7 +9,6 @@ from ipcraft.model.memory_map import (
     RegisterDef,
 )
 from ipcraft.model.port import Port, PortDirection
-from ipcraft.parser.yaml.ip_yaml_parser import YamlIpCoreParser
 
 
 class TestIpCoreProjectGeneratorBasic:

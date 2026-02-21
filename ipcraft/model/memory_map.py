@@ -12,7 +12,7 @@ Naming convention:
 
 from enum import Enum
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Dict, ForwardRef, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from pydantic import Field, computed_field, field_validator, model_validator
 
@@ -22,10 +22,6 @@ from .base import FlexibleModel, StrictModel
 
 if TYPE_CHECKING:
     from ipcraft.runtime.register import AbstractBusInterface
-    from ipcraft.runtime.register import Register as RuntimeRegister
-
-# Forward reference for recursive register definition
-RegisterDef = ForwardRef("RegisterDef")
 
 
 class AccessType(str, Enum):
@@ -94,7 +90,10 @@ class BitFieldDef(FlexibleModel):
 
     name: str = Field(..., description="Bit field name")
     bit_offset: Optional[int] = Field(
-        default=None, alias="offset", description="Starting bit position (LSB = 0)", ge=0
+        default=None,
+        alias="offset",
+        description="Starting bit position (LSB = 0)",
+        ge=0,
     )
     bit_width: Optional[int] = Field(
         default=None, alias="width", description="Number of bits", ge=1
@@ -197,8 +196,12 @@ class RegisterDef(FlexibleModel):
         default=None, alias="offset", description="Offset from address block base", ge=0
     )
     size: int = Field(default=32, description="Register width in bits")
-    access: AccessType = Field(default=AccessType.READ_WRITE, description="Default access type")
-    reset_value: Optional[int] = Field(default=0, description="Reset value for entire register")
+    access: AccessType = Field(
+        default=AccessType.READ_WRITE, description="Default access type"
+    )
+    reset_value: Optional[int] = Field(
+        default=0, description="Reset value for entire register"
+    )
     description: str = Field(default="", description="Register description")
     fields: List[BitFieldDef] = Field(default_factory=list, description="Bit fields")
 
@@ -268,7 +271,9 @@ class RegisterArrayDef(FlexibleModel):
     base_address: int = Field(..., description="Starting address", ge=0)
     count: int = Field(..., description="Number of instances", ge=1)
     stride: int = Field(..., description="Address increment between instances", ge=4)
-    template: RegisterDef = Field(..., description="Register template for each instance")
+    template: RegisterDef = Field(
+        ..., description="Register template for each instance"
+    )
     description: str = Field(default="", description="Array description")
 
     @field_validator("stride")
@@ -282,7 +287,9 @@ class RegisterArrayDef(FlexibleModel):
     def get_register_address(self, index: int) -> int:
         """Get address for specific array instance."""
         if index < 0 or index >= self.count:
-            raise IndexError(f"Register array index {index} out of range [0, {self.count})")
+            raise IndexError(
+                f"Register array index {index} out of range [0, {self.count})"
+            )
         return self.base_address + (index * self.stride)
 
     def get_register_name(self, index: int) -> str:
@@ -332,18 +339,26 @@ class AddressBlock(FlexibleModel):
     """
 
     name: str = Field(..., description="Block name")
-    base_address: Optional[int] = Field(default=0, description="Block starting address", ge=0)
+    base_address: Optional[int] = Field(
+        default=0, description="Block starting address", ge=0
+    )
     range: Optional[Union[int, str]] = Field(
         default=None, description="Block size (bytes or '4K', '1M', etc.)"
     )
-    usage: BlockUsage = Field(default=BlockUsage.REGISTERS, description="Block usage type")
-    access: AccessType = Field(default=AccessType.READ_WRITE, description="Default access")
+    usage: BlockUsage = Field(
+        default=BlockUsage.REGISTERS, description="Block usage type"
+    )
+    access: AccessType = Field(
+        default=AccessType.READ_WRITE, description="Default access"
+    )
     description: str = Field(default="", description="Block description")
 
     default_reg_width: int = Field(default=32, description="Default register width")
 
     # Content
-    registers: List[RegisterDef] = Field(default_factory=list, description="Registers in block")
+    registers: List[RegisterDef] = Field(
+        default_factory=list, description="Registers in block"
+    )
 
     @computed_field
     @cached_property
@@ -396,7 +411,9 @@ class MemoryMap(StrictModel):
 
     name: str = Field(..., description="Memory map name")
     description: str = Field(default="", description="Memory map description")
-    address_blocks: List[AddressBlock] = Field(default_factory=list, description="Address blocks")
+    address_blocks: List[AddressBlock] = Field(
+        default_factory=list, description="Address blocks"
+    )
 
     def model_post_init(self, __context: Any) -> None:
         """Validate memory map after initialization."""
@@ -417,7 +434,8 @@ class MemoryMap(StrictModel):
             return False
 
         return not (
-            block1.end_address <= block2.base_address or block2.end_address <= block1.base_address
+            block1.end_address <= block2.base_address
+            or block2.end_address <= block1.base_address
         )
 
     def get_block_at_address(self, address: int) -> Optional[AddressBlock]:

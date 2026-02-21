@@ -1,9 +1,7 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Union
 
 import yaml
 
-from ipcraft.model.memory_map import AddressBlock as AddressBlockDef
 from ipcraft.model.memory_map import MemoryMap
 from ipcraft.runtime.register import (
     AbstractBusInterface,
@@ -67,7 +65,9 @@ def load_driver(
         for block_def in memory_map.address_blocks:
             # Create runtime block container
             block_obj = AddressBlock(
-                _name=block_def.name, _offset=block_def.base_address or 0, _bus=bus_interface
+                _name=block_def.name,
+                _offset=block_def.base_address or 0,
+                _bus=bus_interface,
             )
 
             # Helper to attach registers to the block
@@ -104,7 +104,9 @@ def load_driver(
                 else:
                     # Single register
                     reg_obj = reg_def.to_runtime_register(
-                        bus=bus_interface, base_offset=block_base, register_class=register_class
+                        bus=bus_interface,
+                        base_offset=block_base,
+                        register_class=register_class,
                     )
                     setattr(block_obj, reg_def.name, reg_obj)
 

@@ -44,7 +44,8 @@ class ArrayConfig(StrictModel):
     count: int = Field(..., description="Number of instances", ge=1)
     index_start: int = Field(default=0, description="Starting index")
     naming_pattern: str = Field(
-        ..., description="Naming pattern with {index} placeholder (e.g., 'M_AXIS_CH{index}_EVENTS')"
+        ...,
+        description="Naming pattern with {index} placeholder (e.g., 'M_AXIS_CH{index}_EVENTS')",
     )
     physical_prefix_pattern: str = Field(
         ..., description="Physical prefix pattern with {index} placeholder"
@@ -74,10 +75,14 @@ class BusInterface(StrictModel):
 
     name: str = Field(..., description="Logical interface name")
     type: str = Field(..., description="Bus type from library (e.g., 'AXI4L', 'AXIS')")
-    mode: BusInterfaceMode = Field(..., description="Interface mode: 'master' or 'slave'")
+    mode: BusInterfaceMode = Field(
+        ..., description="Interface mode: 'master' or 'slave'"
+    )
 
     # Port mapping
-    physical_prefix: str = Field(..., description="Prefix for physical port names (e.g., 's_axi_')")
+    physical_prefix: str = Field(
+        ..., description="Prefix for physical port names (e.g., 's_axi_')"
+    )
 
     # Clock/Reset association
     associated_clock: Optional[str] = Field(

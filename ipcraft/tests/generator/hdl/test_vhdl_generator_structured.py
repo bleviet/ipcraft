@@ -1,12 +1,9 @@
 """Test structured folder generation for VHDL generator."""
 
-from pathlib import Path
-
 import pytest
 
 from ipcraft.generator.hdl.ipcore_project_generator import IpCoreProjectGenerator
 from ipcraft.model.core import VLNV, IpCore
-from ipcraft.model.memory_map import AddressBlock, BitFieldDef, MemoryMap, RegisterDef
 
 
 class TestIpCoreProjectGeneratorStructured:
@@ -146,7 +143,9 @@ class TestIpCoreProjectGeneratorStructured:
         generator = IpCoreProjectGenerator()
 
         # Generate both modes
-        structured = generator.generate_all(simple_ip_core, bus_type="axil", structured=True)
+        structured = generator.generate_all(
+            simple_ip_core, bus_type="axil", structured=True
+        )
         flat = generator.generate_all(simple_ip_core, bus_type="axil", structured=False)
 
         # Compare package file content

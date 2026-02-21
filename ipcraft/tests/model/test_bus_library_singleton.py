@@ -1,5 +1,4 @@
-import pytest
-from ipcraft.model.bus_library import BusLibrary, get_bus_library
+from ipcraft.model.bus_library import get_bus_library
 
 
 class TestBusLibrarySingleton:
@@ -33,13 +32,17 @@ class TestGeneratorUsesBusLibrary:
     """Verify generator no longer loads YAML independently."""
 
     def test_generator_accepts_bus_library(self):
-        from ipcraft.generator.hdl.ipcore_project_generator import IpCoreProjectGenerator
+        from ipcraft.generator.hdl.ipcore_project_generator import (
+            IpCoreProjectGenerator,
+        )
+
         lib = get_bus_library()
         gen = IpCoreProjectGenerator(bus_library=lib)
         assert gen.bus_definitions == lib.get_all_raw_dicts()
 
     def test_detector_accepts_bus_library(self):
         from ipcraft.parser.hdl.bus_detector import BusInterfaceDetector
+
         lib = get_bus_library()
         detector = BusInterfaceDetector(bus_library=lib)
         assert detector.bus_definitions == lib.get_all_raw_dicts()

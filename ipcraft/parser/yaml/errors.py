@@ -7,7 +7,9 @@ from typing import Optional
 class ParseError(Exception):
     """Error during YAML parsing."""
 
-    def __init__(self, message: str, file_path: Optional[Path] = None, line: Optional[int] = None):
+    def __init__(
+        self, message: str, file_path: Optional[Path] = None, line: Optional[int] = None
+    ):
         self.file_path = file_path
         self.line = line
         super().__init__(self._format_message(message))

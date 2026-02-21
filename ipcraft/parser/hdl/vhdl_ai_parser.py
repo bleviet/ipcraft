@@ -19,7 +19,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -41,20 +41,26 @@ logger = logging.getLogger(__name__)
 class ParserConfig(BaseModel):
     """Configuration for AI-powered VHDL parser."""
 
-    llm_provider: str = Field(default="ollama", description="LLM provider (ollama, openai, gemini)")
+    llm_provider: str = Field(
+        default="ollama", description="LLM provider (ollama, openai, gemini)"
+    )
     llm_model: str = Field(default="gemma3:12b", description="LLM model name")
 
     # Default VLNV components
     default_vendor: str = Field(default="unknown.vendor", description="Default vendor")
     default_library: str = Field(default="work", description="Default library")
     default_version: str = Field(default="1.0.0", description="Default version")
-    default_api_version: str = Field(default="fpga-lib/v1.0", description="Schema version")
+    default_api_version: str = Field(
+        default="fpga-lib/v1.0", description="Schema version"
+    )
 
     # Parser behavior
     strict_mode: bool = Field(
         default=False, description="Fail on parsing errors (vs graceful degradation)"
     )
-    max_retries: int = Field(default=2, description="Max retries if LLM response is invalid")
+    max_retries: int = Field(
+        default=2, description="Max retries if LLM response is invalid"
+    )
 
     model_config = {"extra": "forbid"}
 
@@ -104,7 +110,9 @@ class VhdlLlmParser:
             from llm_core.providers.gemini import GeminiProvider
             from llm_core.providers.ollama import OllamaProvider
             from llm_core.providers.openai import OpenAIProvider
-            from llm_core.providers.strategies.openai_api_strategy import OpenAIAPIStrategy
+            from llm_core.providers.strategies.openai_api_strategy import (
+                OpenAIAPIStrategy,
+            )
 
             # Initialize provider based on config
             if self.provider_name.lower() == "ollama":
@@ -145,7 +153,9 @@ class VhdlLlmParser:
             Dict with entity structure including ports, generics, bus interfaces, description
         """
         if not self.is_available():
-            raise RuntimeError("LLM provider not available. Cannot parse VHDL without LLM.")
+            raise RuntimeError(
+                "LLM provider not available. Cannot parse VHDL without LLM."
+            )
 
         system_prompt = """You are an expert VHDL parser. Parse the provided VHDL code and extract structured information.
 
@@ -229,7 +239,9 @@ Return complete JSON with all fields filled:"""
 
             # Extract JSON from markdown code blocks if present
             if "```" in response_clean:
-                json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response_clean, re.DOTALL)
+                json_match = re.search(
+                    r"```(?:json)?\s*(\{.*?\})\s*```", response_clean, re.DOTALL
+                )
                 if json_match:
                     response_clean = json_match.group(1)
                 else:
@@ -293,7 +305,9 @@ class VHDLAiParser:
                 f"LLM parser initialized: {self.config.llm_provider}/{self.config.llm_model}"
             )
         else:
-            error_msg = "LLM provider not available. This parser requires an LLM to function."
+            error_msg = (
+                "LLM provider not available. This parser requires an LLM to function."
+            )
             if self.config.strict_mode:
                 raise RuntimeError(error_msg)
             logger.error(error_msg)
@@ -347,7 +361,9 @@ class VHDLAiParser:
 
         if parsed_data is None:
             if self.config.strict_mode:
-                raise ValueError(f"Failed to parse entity from {source_name}: {last_error}")
+                raise ValueError(
+                    f"Failed to parse entity from {source_name}: {last_error}"
+                )
             logger.error(f"All parse attempts failed: {last_error}")
             return self._create_minimal_ipcore(source_name)
 
@@ -368,7 +384,9 @@ class VHDLAiParser:
             description=f"Failed to parse: {source_name}",
         )
 
-    def _build_ip_core_from_llm(self, parsed_data: Dict[str, Any], source_name: str) -> IpCore:
+    def _build_ip_core_from_llm(
+        self, parsed_data: Dict[str, Any], source_name: str
+    ) -> IpCore:
         """
         Build validated IpCore model from LLM-parsed data.
 
@@ -430,7 +448,9 @@ class VHDLAiParser:
                 )
                 parameters.append(param)
             except (KeyError, ValidationError) as e:
-                logger.warning(f"Skipping invalid generic {generic_data.get('name')}: {e}")
+                logger.warning(
+                    f"Skipping invalid generic {generic_data.get('name')}: {e}"
+                )
 
         # Convert bus interfaces to BusInterface models
         bus_interface_models = []
@@ -472,5 +492,7 @@ class VHDLAiParser:
 
             # Return minimal valid core
             return IpCore(
-                api_version=self.config.default_api_version, vlnv=vlnv, description=description
+                api_version=self.config.default_api_version,
+                vlnv=vlnv,
+                description=description,
             )

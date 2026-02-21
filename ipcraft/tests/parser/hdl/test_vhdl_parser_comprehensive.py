@@ -5,11 +5,9 @@ This test file covers edge cases, bus interface detection scenarios,
 and error handling that are not covered by the basic test file.
 """
 
-import os
-
 import pytest
 
-from ipcraft.model import IpCore, Port, PortDirection
+from ipcraft.model import PortDirection
 from ipcraft.parser.hdl.vhdl_parser import VHDLParser
 
 

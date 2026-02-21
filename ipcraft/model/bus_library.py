@@ -29,11 +29,13 @@ SUGGESTED_PREFIXES = {
 
 class BusLibraryError(Exception):
     """Base exception for bus library errors."""
+
     pass
 
 
 class BusLibraryNotFoundError(BusLibraryError, FileNotFoundError):
     """Raised when the bus definitions file cannot be found."""
+
     pass
 
 
@@ -109,7 +111,9 @@ class BusLibrary:
             with open(path, "r", encoding="utf-8") as f:
                 raw_data = yaml.safe_load(f) or {}
         except yaml.YAMLError as e:
-            raise BusLibraryError(f"YAML syntax error in bus definitions file: {e}") from e
+            raise BusLibraryError(
+                f"YAML syntax error in bus definitions file: {e}"
+            ) from e
         except OSError as e:
             raise BusLibraryError(f"Failed to read bus definitions file: {e}") from e
 
@@ -163,7 +167,9 @@ class BusLibrary:
         """
         return self._definitions.get(bus_type)
 
-    def get_bus_info(self, bus_type: str, include_ports: bool = False) -> Optional[Dict[str, Any]]:
+    def get_bus_info(
+        self, bus_type: str, include_ports: bool = False
+    ) -> Optional[Dict[str, Any]]:
         """
         Get bus information as dictionary (for JSON serialization).
 
@@ -216,7 +222,8 @@ class BusLibrary:
             List of bus info dictionaries
         """
         return [
-            self.get_bus_info(key, include_ports=include_ports) for key in self.list_bus_types()
+            self.get_bus_info(key, include_ports=include_ports)
+            for key in self.list_bus_types()
         ]
 
     def get_bus_library_dict(self) -> Dict[str, Dict[str, Any]]:

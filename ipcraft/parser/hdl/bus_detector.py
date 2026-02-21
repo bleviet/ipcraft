@@ -54,7 +54,9 @@ class BusInterfaceDetector:
 
         return detected
 
-    def classify_clocks_resets(self, ports: List[Port]) -> Tuple[List[Clock], List[Reset]]:
+    def classify_clocks_resets(
+        self, ports: List[Port]
+    ) -> Tuple[List[Clock], List[Reset]]:
         """
         Identify clock and reset signals from ports.
 
@@ -100,7 +102,7 @@ class BusInterfaceDetector:
                         Clock(
                             name=port.name,
                             frequency=None,  # Unknown from VHDL
-                            description=f"Detected clock signal",
+                            description="Detected clock signal",
                         )
                     )
                     break
@@ -116,7 +118,9 @@ class BusInterfaceDetector:
                     )
                     resets.append(
                         Reset(
-                            name=port.name, polarity=polarity, description=f"Detected reset signal"
+                            name=port.name,
+                            polarity=polarity,
+                            description="Detected reset signal",
                         )
                     )
                     break
@@ -159,7 +163,11 @@ class BusInterfaceDetector:
                 if len(parts) >= 2:
                     # Use first two parts as potential prefix
                     potential_prefix = f"{parts[0]}_{parts[1]}_"
-                    if any(p.name.lower().startswith(potential_prefix) for p in ports if p != port):
+                    if any(
+                        p.name.lower().startswith(potential_prefix)
+                        for p in ports
+                        if p != port
+                    ):
                         groups[potential_prefix].append(port)
 
         return dict(groups)
@@ -242,9 +250,15 @@ class BusInterfaceDetector:
                     expected_dir = port_def.get("direction", "out")
                     if port_def["name"].upper() in suffix_map:
                         actual_port = suffix_map[port_def["name"].upper()]
-                        if expected_dir == "out" and actual_port.direction == PortDirection.OUT:
+                        if (
+                            expected_dir == "out"
+                            and actual_port.direction == PortDirection.OUT
+                        ):
                             return BusInterfaceMode.SOURCE
-                        elif expected_dir == "out" and actual_port.direction == PortDirection.IN:
+                        elif (
+                            expected_dir == "out"
+                            and actual_port.direction == PortDirection.IN
+                        ):
                             return BusInterfaceMode.SINK
             return BusInterfaceMode.SOURCE  # Default
 
@@ -257,9 +271,15 @@ class BusInterfaceDetector:
                     actual_port = suffix_map[port_def["name"].upper()]
                     # Master: AWREADY is input (from slave)
                     # Slave: AWREADY is output (to master)
-                    if expected_dir == "in" and actual_port.direction == PortDirection.OUT:
+                    if (
+                        expected_dir == "in"
+                        and actual_port.direction == PortDirection.OUT
+                    ):
                         return BusInterfaceMode.SLAVE
-                    elif expected_dir == "in" and actual_port.direction == PortDirection.IN:
+                    elif (
+                        expected_dir == "in"
+                        and actual_port.direction == PortDirection.IN
+                    ):
                         return BusInterfaceMode.MASTER
 
         return BusInterfaceMode.SLAVE  # Default for most IPs

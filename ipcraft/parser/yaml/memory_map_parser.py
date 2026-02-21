@@ -88,7 +88,11 @@ class MemoryMapParserMixin(ParserHostContext):
         except yaml.YAMLError as e:
             raise ParseError(f"YAML syntax error in memory map file: {e}", file_path)
 
-        if len(docs) > 1 and isinstance(docs[0], dict) and "registerTemplates" in docs[0]:
+        if (
+            len(docs) > 1
+            and isinstance(docs[0], dict)
+            and "registerTemplates" in docs[0]
+        ):
             self._register_templates = docs[0]["registerTemplates"]
             map_data = docs[1]
         else:
@@ -116,7 +120,9 @@ class MemoryMapParserMixin(ParserHostContext):
                             {
                                 "name": map_data.get("name"),
                                 "description": map_data.get("description"),
-                                "address_blocks": address_blocks if address_blocks else None,
+                                "address_blocks": (
+                                    address_blocks if address_blocks else None
+                                ),
                             }
                         )
                     )
@@ -133,11 +139,15 @@ class MemoryMapParserMixin(ParserHostContext):
         for idx, block_data in enumerate(data):
             try:
                 base_address = block_data.get("baseAddress", 0)
-                registers = self._parse_registers(block_data.get("registers", []), file_path)
+                registers = self._parse_registers(
+                    block_data.get("registers", []), file_path
+                )
 
                 range_value = block_data.get("range")
                 if range_value is None and registers:
-                    max_offset = max(reg.address_offset + (reg.size // 8) for reg in registers)
+                    max_offset = max(
+                        reg.address_offset + (reg.size // 8) for reg in registers
+                    )
                     range_value = max(max_offset, 64)
                 elif range_value is None:
                     range_value = 4096
@@ -161,7 +171,9 @@ class MemoryMapParserMixin(ParserHostContext):
                 raise ParseError(f"Error parsing addressBlock[{idx}]: {e}", file_path)
         return blocks
 
-    def _parse_registers(self, data: List[Dict[str, Any]], file_path: Path) -> List[RegisterDef]:
+    def _parse_registers(
+        self, data: List[Dict[str, Any]], file_path: Path
+    ) -> List[RegisterDef]:
         """Parse register definitions and expand array/template constructs."""
         registers = []
         current_offset = 0
@@ -226,7 +238,9 @@ class MemoryMapParserMixin(ParserHostContext):
         sub_registers = array_spec.get("registers", [])
 
         if not sub_registers:
-            raise ParseError(f"Nested register array '{base_name}' has no sub-registers", file_path)
+            raise ParseError(
+                f"Nested register array '{base_name}' has no sub-registers", file_path
+            )
 
         registers = []
         for instance_idx in range(count):
@@ -282,7 +296,9 @@ class MemoryMapParserMixin(ParserHostContext):
                 )
 
                 size = template_reg.get("size", 32)
-                fields = self._parse_bit_fields(template_reg.get("fields", []), file_path)
+                fields = self._parse_bit_fields(
+                    template_reg.get("fields", []), file_path
+                )
 
                 registers.append(
                     self._build_register_def(
@@ -299,7 +315,9 @@ class MemoryMapParserMixin(ParserHostContext):
 
         return registers
 
-    def _parse_bit_fields(self, data: List[Dict[str, Any]], file_path: Path) -> List[BitFieldDef]:
+    def _parse_bit_fields(
+        self, data: List[Dict[str, Any]], file_path: Path
+    ) -> List[BitFieldDef]:
         """Parse bit-field definitions from register entries."""
         fields = []
         current_bit = 0
@@ -307,7 +325,9 @@ class MemoryMapParserMixin(ParserHostContext):
         for idx, field_data in enumerate(data):
             try:
                 if "bits" in field_data:
-                    bit_offset, bit_width = self._parse_bits_notation(field_data["bits"])
+                    bit_offset, bit_width = self._parse_bits_notation(
+                        field_data["bits"]
+                    )
                 else:
                     bit_offset = field_data.get("bitOffset")
                     bit_width = field_data.get("bitWidth", 1)

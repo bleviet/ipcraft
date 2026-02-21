@@ -15,7 +15,9 @@ class VendorGenerationMixin:
         context["vendor"] = ip_core.vlnv.vendor
         context["library"] = ip_core.vlnv.library
         context["version"] = ip_core.vlnv.version
-        context["description"] = ip_core.description if hasattr(ip_core, "description") else ""
+        context["description"] = (
+            ip_core.description if hasattr(ip_core, "description") else ""
+        )
         context["author"] = ip_core.vlnv.vendor
         context["display_name"] = ip_core.vlnv.name.replace("_", " ").title()
         return template.render(**context)
@@ -27,7 +29,9 @@ class VendorGenerationMixin:
         context["vendor"] = ip_core.vlnv.vendor
         context["library"] = ip_core.vlnv.library
         context["version"] = ip_core.vlnv.version
-        context["description"] = ip_core.description if hasattr(ip_core, "description") else ""
+        context["description"] = (
+            ip_core.description if hasattr(ip_core, "description") else ""
+        )
         context["display_name"] = ip_core.vlnv.name.replace("_", " ").title()
         return template.render(**context)
 
@@ -50,6 +54,8 @@ class VendorGenerationMixin:
         if vendor in ["xilinx", "both"]:
             files["component.xml"] = self.generate_xilinx_component_xml(ip_core)
             version_str = ip_core.vlnv.version.replace(".", "_")
-            files[f"xilinx/xgui/{name}_v{version_str}.tcl"] = self.generate_xilinx_xgui(ip_core)
+            files[f"xilinx/xgui/{name}_v{version_str}.tcl"] = self.generate_xilinx_xgui(
+                ip_core
+            )
 
         return files

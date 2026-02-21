@@ -6,9 +6,7 @@ Supports imports, bus library loading, and memory map references.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Callable, TypeVar
-
-T = TypeVar("T")
+from typing import Any, Callable, Dict, List, Optional, TypeVar, Union
 
 import yaml
 from pydantic import ValidationError
@@ -25,11 +23,13 @@ from ipcraft.model import (
     Port,
     Reset,
 )
+from ipcraft.utils import filter_none
 
 from .errors import ParseError
 from .fileset_parser import FileSetParserMixin
 from .memory_map_parser import MemoryMapParserMixin
-from ipcraft.utils import filter_none
+
+T = TypeVar("T")
 
 
 class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
@@ -96,7 +96,7 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
             for error in e.errors():
                 loc = " -> ".join(str(x) for x in error["loc"])
                 errors.append(f"{loc}: {error['msg']}")
-            raise ParseError(f"Validation failed:\n  " + "\n  ".join(errors), file_path)
+            raise ParseError("Validation failed:\n  " + "\n  ".join(errors), file_path)
 
     def _parse_ip_core(self, data: Dict[str, Any], file_path: Path) -> IpCore:
         """Parse the main IP core structure."""
@@ -128,7 +128,9 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
             bus_lib_path = (file_path.parent / bus_library).resolve()
             self._load_bus_library(bus_lib_path)
 
-        bus_interfaces = self._parse_bus_interfaces(data.get("busInterfaces", []), file_path)
+        bus_interfaces = self._parse_bus_interfaces(
+            data.get("busInterfaces", []), file_path
+        )
         parameters = self._parse_parameters(data.get("parameters", []), file_path)
 
         # Parse memory maps (may include imports)
@@ -205,47 +207,72 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
 
     def _parse_clocks(self, data: List[Dict[str, Any]], file_path: Path) -> List[Clock]:
         """Parse clock definitions."""
+
         def build_clock(d):
-            return Clock(**filter_none({
-                "name": d.get("name"),
-                "logical_name": d.get("logicalName", "CLK"),
-                "direction": d.get("direction", "in"),
-                "frequency": d.get("frequency"),
-                "description": d.get("description"),
-            }))
+            return Clock(
+                **filter_none(
+                    {
+                        "name": d.get("name"),
+                        "logical_name": d.get("logicalName", "CLK"),
+                        "direction": d.get("direction", "in"),
+                        "frequency": d.get("frequency"),
+                        "description": d.get("description"),
+                    }
+                )
+            )
+
         return self._parse_list(data, "clock", build_clock, file_path)
 
     def _parse_resets(self, data: List[Dict[str, Any]], file_path: Path) -> List[Reset]:
         """Parse reset definitions."""
+
         def build_reset(d):
             polarity_str = d.get("polarity", "activeLow")
-            polarity = Polarity.ACTIVE_LOW if polarity_str == "activeLow" else Polarity.ACTIVE_HIGH
-            default_logical = "RESET_N" if polarity_str in ["activeLow", "active_low"] else "RESET"
-            return Reset(**filter_none({
-                "name": d.get("name"),
-                "logical_name": d.get("logicalName", default_logical),
-                "direction": d.get("direction", "in"),
-                "polarity": polarity,
-                "description": d.get("description"),
-            }))
+            polarity = (
+                Polarity.ACTIVE_LOW
+                if polarity_str == "activeLow"
+                else Polarity.ACTIVE_HIGH
+            )
+            default_logical = (
+                "RESET_N" if polarity_str in ["activeLow", "active_low"] else "RESET"
+            )
+            return Reset(
+                **filter_none(
+                    {
+                        "name": d.get("name"),
+                        "logical_name": d.get("logicalName", default_logical),
+                        "direction": d.get("direction", "in"),
+                        "polarity": polarity,
+                        "description": d.get("description"),
+                    }
+                )
+            )
+
         return self._parse_list(data, "reset", build_reset, file_path)
 
     def _parse_ports(self, data: List[Dict[str, Any]], file_path: Path) -> List[Port]:
         """Parse port definitions."""
+
         def build_port(d):
-            return Port(**filter_none({
-                "name": d.get("name"),
-                "logical_name": d.get("logicalName", ""),
-                "direction": d.get("direction"),
-                "width": d.get("width", 1),
-                "description": d.get("description"),
-            }))
+            return Port(
+                **filter_none(
+                    {
+                        "name": d.get("name"),
+                        "logical_name": d.get("logicalName", ""),
+                        "direction": d.get("direction"),
+                        "width": d.get("width", 1),
+                        "description": d.get("description"),
+                    }
+                )
+            )
+
         return self._parse_list(data, "port", build_port, file_path)
 
     def _parse_bus_interfaces(
         self, data: List[Dict[str, Any]], file_path: Path
     ) -> List[BusInterface]:
         """Parse bus interface definitions."""
+
         def build_bus(d):
             array_config = None
             if "array" in d:
@@ -256,29 +283,42 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
                     naming_pattern=array_data.get("namingPattern"),
                     physical_prefix_pattern=array_data.get("physicalPrefixPattern"),
                 )
-            return BusInterface(**filter_none({
-                "name": d.get("name"),
-                "type": d.get("type"),
-                "mode": d.get("mode"),
-                "physical_prefix": d.get("physicalPrefix"),
-                "associated_clock": d.get("associatedClock"),
-                "associated_reset": d.get("associatedReset"),
-                "memory_map_ref": d.get("memoryMapRef"),
-                "use_optional_ports": d.get("useOptionalPorts"),
-                "port_width_overrides": d.get("portWidthOverrides"),
-                "array": array_config,
-            }))
+            return BusInterface(
+                **filter_none(
+                    {
+                        "name": d.get("name"),
+                        "type": d.get("type"),
+                        "mode": d.get("mode"),
+                        "physical_prefix": d.get("physicalPrefix"),
+                        "associated_clock": d.get("associatedClock"),
+                        "associated_reset": d.get("associatedReset"),
+                        "memory_map_ref": d.get("memoryMapRef"),
+                        "use_optional_ports": d.get("useOptionalPorts"),
+                        "port_width_overrides": d.get("portWidthOverrides"),
+                        "array": array_config,
+                    }
+                )
+            )
+
         return self._parse_list(data, "busInterface", build_bus, file_path)
 
-    def _parse_parameters(self, data: List[Dict[str, Any]], file_path: Path) -> List[Parameter]:
+    def _parse_parameters(
+        self, data: List[Dict[str, Any]], file_path: Path
+    ) -> List[Parameter]:
         """Parse parameter definitions."""
+
         def build_param(d):
-            return Parameter(**filter_none({
-                "name": d.get("name"),
-                "value": d.get("value"),
-                "data_type": d.get("dataType", "integer"),
-                "description": d.get("description"),
-            }))
+            return Parameter(
+                **filter_none(
+                    {
+                        "name": d.get("name"),
+                        "value": d.get("value"),
+                        "data_type": d.get("dataType", "integer"),
+                        "description": d.get("description"),
+                    }
+                )
+            )
+
         return self._parse_list(data, "parameter", build_param, file_path)
 
     def _load_bus_library(self, file_path: Path) -> Dict[str, Any]:

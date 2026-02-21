@@ -15,7 +15,9 @@ from .errors import ParseError
 class FileSetParserMixin:
     """Mixin implementing file set parsing and import behavior."""
 
-    def _parse_file_sets(self, data: List[Dict[str, Any]], file_path: Path) -> List[FileSet]:
+    def _parse_file_sets(
+        self, data: List[Dict[str, Any]], file_path: Path
+    ) -> List[FileSet]:
         """Parse file set definitions, including imported file-set files."""
         file_sets = []
         for idx, fs_data in enumerate(data):

@@ -4,8 +4,6 @@ Test the Pydantic models with example data.
 This test demonstrates creating and validating IP core models.
 """
 
-import pytest
-
 from ipcraft.model import (
     VLNV,
     AccessType,
@@ -92,7 +90,13 @@ def test_bus_interface():
         associated_reset="REG_RST",
         memory_map_ref="CSR_MAP",
         use_optional_ports=["AWPROT", "ARPROT"],
-        port_width_overrides={"AWADDR": 12, "ARADDR": 12, "WDATA": 32, "RDATA": 32, "WSTRB": 4},
+        port_width_overrides={
+            "AWADDR": 12,
+            "ARADDR": 12,
+            "WDATA": 32,
+            "RDATA": 32,
+            "WSTRB": 4,
+        },
     )
 
     print(f"✓ Created bus interface: {bus.name}")
@@ -133,7 +137,7 @@ def test_bus_interface_array():
     print(f"  Type: {bus.type}")
     print(f"  Is array: {bus.is_array}")
     print(f"  Instance count: {bus.instance_count}")
-    print(f"  Instances:")
+    print("  Instances:")
     for idx in bus.array.indices:
         print(
             f"    [{idx}] {bus.array.get_instance_name(idx)} -> {bus.array.get_instance_prefix(idx)}"
@@ -155,7 +159,9 @@ def test_memory_map():
         access=AccessType.READ_WRITE,
         description="Control register",
         fields=[
-            BitFieldDef(name="ENABLE", bit_offset=0, bit_width=1, access=AccessType.READ_WRITE),
+            BitFieldDef(
+                name="ENABLE", bit_offset=0, bit_width=1, access=AccessType.READ_WRITE
+            ),
             BitFieldDef(
                 name="MODE",
                 bit_offset=1,
@@ -163,7 +169,9 @@ def test_memory_map():
                 access=AccessType.READ_WRITE,
                 description="0=normal, 1=debug",
             ),
-            BitFieldDef(name="RESERVED", bit_offset=2, bit_width=30, access=AccessType.READ_ONLY),
+            BitFieldDef(
+                name="RESERVED", bit_offset=2, bit_width=30, access=AccessType.READ_ONLY
+            ),
         ],
     )
 
@@ -180,7 +188,9 @@ def test_memory_map():
                 bit_width=1,
                 access=AccessType.WRITE_1_TO_CLEAR,
             ),
-            BitFieldDef(name="RESERVED", bit_offset=1, bit_width=31, access=AccessType.READ_ONLY),
+            BitFieldDef(
+                name="RESERVED", bit_offset=1, bit_width=31, access=AccessType.READ_ONLY
+            ),
         ],
     )
 

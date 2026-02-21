@@ -6,11 +6,14 @@ It verifies that the driver correctly writes 1s to clear bits, and that it
 reads back the correct state from the bus.
 """
 
-from unittest.mock import Mock
-
 import pytest
 
-from ipcraft.runtime.register import AbstractBusInterface, BitField, Register, RuntimeAccessType
+from ipcraft.runtime.register import (
+    AbstractBusInterface,
+    BitField,
+    Register,
+    RuntimeAccessType,
+)
 
 
 class MockBusInterface(AbstractBusInterface):
@@ -44,20 +47,38 @@ class TestRW1CAccessType:
         # Create a register with mixed access types including rw1c
         self.fields = [
             BitField(
-                name="tx_complete", offset=0, width=1, access="rw1c", description="TX complete flag"
+                name="tx_complete",
+                offset=0,
+                width=1,
+                access="rw1c",
+                description="TX complete flag",
             ),
             BitField(
-                name="rx_complete", offset=1, width=1, access="rw1c", description="RX complete flag"
+                name="rx_complete",
+                offset=1,
+                width=1,
+                access="rw1c",
+                description="RX complete flag",
             ),
             BitField(
-                name="error_flags", offset=8, width=4, access="rw1c", description="Error flags"
+                name="error_flags",
+                offset=8,
+                width=4,
+                access="rw1c",
+                description="Error flags",
             ),
             BitField(
-                name="control", offset=16, width=8, access="rw", description="Control register"
+                name="control",
+                offset=16,
+                width=8,
+                access="rw",
+                description="Control register",
             ),
         ]
 
-        self.reg = Register(name="status", offset=0x10, bus=self.bus, fields=self.fields)
+        self.reg = Register(
+            name="status", offset=0x10, bus=self.bus, fields=self.fields
+        )
 
     def test_rw1c_field_creation(self):
         """Test that rw1c fields are created correctly."""

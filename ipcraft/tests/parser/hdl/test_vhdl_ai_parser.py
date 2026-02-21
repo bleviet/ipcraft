@@ -27,7 +27,9 @@ def test_vhdl_dir():
 @pytest.fixture
 def parser_config():
     """Default parser configuration for testing."""
-    return ParserConfig(llm_provider="ollama", llm_model="gemma3:12b", strict_mode=False)
+    return ParserConfig(
+        llm_provider="ollama", llm_model="gemma3:12b", strict_mode=False
+    )
 
 
 @pytest.fixture
@@ -69,7 +71,9 @@ class TestBasicEntityParsing:
             vhdl_file = test_vhdl_dir / filename
             if vhdl_file.exists():
                 ip_core = parser.parse_file(vhdl_file)
-                assert ip_core.vlnv.name == expected_name, f"Entity name mismatch for {filename}"
+                assert (
+                    ip_core.vlnv.name == expected_name
+                ), f"Entity name mismatch for {filename}"
 
     def test_description_generation(self, parser, test_vhdl_dir):
         """Verify LLM generates meaningful descriptions."""
@@ -275,7 +279,9 @@ class TestBusInterfaceDetection:
         assert len(ip_core.bus_interfaces) >= 1
 
         # Find AXI interface
-        axi_bus = next((b for b in ip_core.bus_interfaces if "AXI" in b.type.upper()), None)
+        axi_bus = next(
+            (b for b in ip_core.bus_interfaces if "AXI" in b.type.upper()), None
+        )
         assert axi_bus is not None
         assert "s_axi" in axi_bus.name.lower()
         assert axi_bus.mode == "slave"
@@ -292,7 +298,8 @@ class TestBusInterfaceDetection:
 
         # Check for AXI-Stream interfaces
         assert any(
-            "axis" in name.lower() or "stream" in t.lower() for name, t in zip(bus_names, bus_types)
+            "axis" in name.lower() or "stream" in t.lower()
+            for name, t in zip(bus_names, bus_types)
         )
 
     def test_spi_detection(self, parser, test_vhdl_dir):
@@ -388,7 +395,11 @@ class TestModelValidation:
         for port in ip_core.ports:
             # Required fields
             assert port.name is not None
-            assert port.direction in [PortDirection.IN, PortDirection.OUT, PortDirection.INOUT]
+            assert port.direction in [
+                PortDirection.IN,
+                PortDirection.OUT,
+                PortDirection.INOUT,
+            ]
             assert port.width > 0
             assert port.physical_port is not None
 
@@ -440,7 +451,8 @@ class TestIntegration:
         assert ip_core.vlnv.name == "simple_counter"
 
     @pytest.mark.skipif(
-        "OPENAI_API_KEY" not in __import__("os").environ, reason="OpenAI API key not configured"
+        "OPENAI_API_KEY" not in __import__("os").environ,
+        reason="OpenAI API key not configured",
     )
     def test_parse_with_openai(self, test_vhdl_dir):
         """Test parsing with OpenAI provider."""
@@ -451,7 +463,8 @@ class TestIntegration:
         assert ip_core.vlnv.name == "simple_counter"
 
     @pytest.mark.skipif(
-        "GEMINI_API_KEY" not in __import__("os").environ, reason="Gemini API key not configured"
+        "GEMINI_API_KEY" not in __import__("os").environ,
+        reason="Gemini API key not configured",
     )
     def test_parse_with_gemini(self, test_vhdl_dir):
         """Test parsing with Gemini provider."""

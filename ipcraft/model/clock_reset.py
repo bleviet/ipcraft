@@ -22,7 +22,9 @@ class Clock(Port):
     direction: PortDirection = Field(
         default=PortDirection.IN, description="Port direction (typically 'in')"
     )
-    frequency: Optional[str] = Field(default=None, description="Clock frequency (e.g., '100MHz')")
+    frequency: Optional[str] = Field(
+        default=None, description="Clock frequency (e.g., '100MHz')"
+    )
 
     @property
     def frequency_hz(self) -> Optional[float]:
@@ -62,7 +64,8 @@ class Reset(Port):
         default=PortDirection.IN, description="Port direction (typically 'in')"
     )
     polarity: Polarity = Field(
-        default=Polarity.ACTIVE_HIGH, description="Reset polarity (activeHigh or activeLow)"
+        default=Polarity.ACTIVE_HIGH,
+        description="Reset polarity (activeHigh or activeLow)",
     )
 
     @field_validator("polarity", mode="before")

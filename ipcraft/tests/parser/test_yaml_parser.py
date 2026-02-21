@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from ipcraft.model import AccessType, IpCore, Polarity, PortDirection
+from ipcraft.model import AccessType, Polarity, PortDirection
 from ipcraft.parser import ParseError, YamlIpCoreParser
 
 # Get the path to the examples directory

@@ -41,9 +41,13 @@ class Port(StrictModel):
     """
 
     name: str = Field(..., description="Physical port name (HDL)")
-    logical_name: str = Field(default="", description="Standard logical name for association")
+    logical_name: str = Field(
+        default="", description="Standard logical name for association"
+    )
     direction: PortDirection = Field(..., description="Port direction")
-    width: Union[int, str] = Field(default=1, description="Port width in bits or parameter name")
+    width: Union[int, str] = Field(
+        default=1, description="Port width in bits or parameter name"
+    )
     type: str = Field(
         default="std_logic", description="VHDL type (e.g. std_logic, std_logic_vector)"
     )

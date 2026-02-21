@@ -13,10 +13,13 @@ BUS_DEFINITIONS_PATH = None
 # 1. Try importlib (if installed as package)
 if sys.version_info >= (3, 9):
     import importlib.resources
+
     try:
         # Access 'common' directory from 'ipcraft_spec' package
         # Note: 'ipcraft_spec' is the imported package name (normalized from ipcraft-spec)
-        ref = importlib.resources.files("ipcraft_spec") / "common" / "bus_definitions.yml"
+        ref = (
+            importlib.resources.files("ipcraft_spec") / "common" / "bus_definitions.yml"
+        )
         if ref.is_file():
             BUS_DEFINITIONS_PATH = ref
     except (ImportError, ModuleNotFoundError):
@@ -29,13 +32,16 @@ if BUS_DEFINITIONS_PATH is None:
     # Sibling repo ipcraft-spec is ../ipcraft-spec
     repo_root = Path(__file__).resolve().parent.parent.parent
     sibling_path = repo_root.parent / "ipcraft-spec" / "common" / "bus_definitions.yml"
-    
+
     if sibling_path.exists():
         BUS_DEFINITIONS_PATH = sibling_path
     else:
         # Fallback to internal path if bundled (e.g. usage in VS Code extension context if copied)
         # or error
-        BUS_DEFINITIONS_PATH = repo_root / "ipcraft-spec" / "common" / "bus_definitions.yml"
+        BUS_DEFINITIONS_PATH = (
+            repo_root / "ipcraft-spec" / "common" / "bus_definitions.yml"
+        )
+
 
 def parse_bit_range(bits_str: str) -> Tuple[int, int]:
     """Parse bit notation like ``[7:4]`` or ``[0]`` into ``(offset, width)``.

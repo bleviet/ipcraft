@@ -4,36 +4,27 @@ Verilog Parser module using pyparsing to parse Verilog module declarations.
 
 import logging
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from pyparsing import (
     CaselessKeyword,
     CaselessLiteral,
-    CharsNotIn,
-    Forward,
     Group,
-    Keyword,
     LineEnd,
-    Literal,
     ParseBaseException,
 )
 from pyparsing import Optional as Opt
 from pyparsing import (
     ParserElement,
-    QuotedString,
     SkipTo,
-    StringEnd,
     Suppress,
-    White,
     Word,
     ZeroOrMore,
     alphanums,
     alphas,
-    cppStyleComment,
     delimitedList,
     nums,
     oneOf,
-    pythonStyleComment,
 )
 
 from ipcraft.model import VLNV, IpCore, Port, PortDirection
@@ -167,7 +158,9 @@ class VerilogParser:
             # Extract module name - handle modules with special /* AUTOARG */ comment
             # This pattern is more robust for modules with special comments
             module_pattern = r"module\s+(\w+)\s*\((.*?)\);"
-            module_match = re.search(module_pattern, verilog_text, re.IGNORECASE | re.DOTALL)
+            module_match = re.search(
+                module_pattern, verilog_text, re.IGNORECASE | re.DOTALL
+            )
 
             if module_match:
                 module_name = module_match.group(1)
@@ -180,9 +173,7 @@ class VerilogParser:
 
                 # Parse ANSI-style port declarations with a more flexible regex pattern
                 # This handles: input/output/inout, with optional reg/wire/logic, optional bit range, and name
-                ansi_port_pattern = (
-                    r"(input|output|inout)\s+(reg|wire|logic)?\s*(?:\[(\d+)\s*:\s*(\d+)\])?\s*(\w+)"
-                )
+                ansi_port_pattern = r"(input|output|inout)\s+(reg|wire|logic)?\s*(?:\[(\d+)\s*:\s*(\d+)\])?\s*(\w+)"
                 ansi_ports = re.findall(ansi_port_pattern, ports_text, re.IGNORECASE)
 
                 if ansi_ports:
@@ -214,7 +205,9 @@ class VerilogParser:
                 else:
                     # Non-ANSI style parsing logic here...
                     # Simplified regex based port finding for non-ANSI
-                    port_names = [p.strip() for p in re.split(r",\s*", ports_text) if p.strip()]
+                    port_names = [
+                        p.strip() for p in re.split(r",\s*", ports_text) if p.strip()
+                    ]
 
                     # Look for port declarations in module body
                     decl_pattern = r"(input|output|inout)(?:\s+(?:reg|wire|logic))?(?:\s*\[(\d+)\s*:\s*(\d+)\])?(?:\s+(\w+))"
@@ -237,7 +230,9 @@ class VerilogParser:
                             ports.append(self._create_port(p_name, "input", None, None))
 
                 # Create VLNV and IpCore
-                vlnv = VLNV(vendor="parsed", library="verilog", name=module_name, version="1.0")
+                vlnv = VLNV(
+                    vendor="parsed", library="verilog", name=module_name, version="1.0"
+                )
                 result["module"] = IpCore(
                     api_version="1.0",
                     vlnv=vlnv,
@@ -313,7 +308,7 @@ class VerilogParser:
                 ports.append(self._create_port_from_decl(port_decl))
         # Handle non-ANSI style module
         elif "port_list" in module_data:
-            port_names = module_data["port_list"]
+            module_data["port_list"]
             # Find port declarations in the rest of the module body
             # This logic is simplified; robustness requires regex fallback usually
             # But let's assume packrat parser worked if we are here
@@ -348,7 +343,7 @@ class VerilogParser:
         name = port_decl["name"]
         direction_str = port_decl[0].lower()
 
-        direction = PortDirection.from_string(direction_str)
+        PortDirection.from_string(direction_str)
 
         msb = None
         lsb = None

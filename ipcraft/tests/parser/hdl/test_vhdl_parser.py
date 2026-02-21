@@ -2,14 +2,12 @@
 Test cases for the VHDL parser module.
 """
 
-import difflib
 import os
 
 import pytest
-from pyparsing import Word, alphanums, alphas
 
 from ipcraft.generator.hdl.ipcore_project_generator import IpCoreProjectGenerator
-from ipcraft.model import IpCore, Port, PortDirection
+from ipcraft.model import IpCore, PortDirection
 from ipcraft.parser.hdl.vhdl_parser import VHDLParser
 
 
@@ -129,7 +127,7 @@ end entity counter;
         generated_vhdl = generator.generate_core(ip_core).strip()
 
         # Normalize whitespace for comparison
-        norm_original = self._normalize_whitespace(original_vhdl)
+        self._normalize_whitespace(original_vhdl)
         norm_regenerated = self._normalize_whitespace(generated_vhdl)
 
         # Compare the essential parts
@@ -181,7 +179,9 @@ end entity counter;
         width_param = next(p for p in result["entity"].parameters if p.name == "WIDTH")
         assert "natural" in width_param.description.lower()
 
-        reset_value_param = next(p for p in result["entity"].parameters if p.name == "RESET_VALUE")
+        reset_value_param = next(
+            p for p in result["entity"].parameters if p.name == "RESET_VALUE"
+        )
         assert "std_logic_vector" in reset_value_param.description.lower()
 
         # Verify ports - direct access
@@ -227,13 +227,19 @@ end entity counter;
         assert "CFS_OUT_SIZE" in param_names
 
         # Check generic types
-        cfs_config = next(p for p in result["entity"].parameters if p.name == "CFS_CONFIG")
+        cfs_config = next(
+            p for p in result["entity"].parameters if p.name == "CFS_CONFIG"
+        )
         assert "std_ulogic_vector" in cfs_config.description.lower()
 
-        cfs_in_size = next(p for p in result["entity"].parameters if p.name == "CFS_IN_SIZE")
+        cfs_in_size = next(
+            p for p in result["entity"].parameters if p.name == "CFS_IN_SIZE"
+        )
         assert "natural" in cfs_in_size.description.lower()
 
-        cfs_out_size = next(p for p in result["entity"].parameters if p.name == "CFS_OUT_SIZE")
+        cfs_out_size = next(
+            p for p in result["entity"].parameters if p.name == "CFS_OUT_SIZE"
+        )
         assert "natural" in cfs_out_size.description.lower()
 
         # Verify all 9 ports are still parsed correctly

@@ -3,21 +3,21 @@ Test module for complete HDL roundtrip testing (parse -> generate -> compare).
 This allows testing the full workflow with real HDL files.
 """
 
-import difflib
 import glob
 import os
 import re
 import tempfile
-from typing import Any, Dict, Tuple
+from typing import Dict
 
 import pytest
 
 from ipcraft.generator.hdl.ipcore_project_generator import IpCoreProjectGenerator
-from ipcraft.model import IpCore, Parameter, Port, PortDirection
 from ipcraft.parser.hdl.vhdl_parser import VHDLParser
 
 # Check if neorv32 files exist
-NEORV32_FILES = glob.glob(os.path.join(os.path.dirname(__file__), "../resources/vhdl/neorv32_core/*.vhd"))
+NEORV32_FILES = glob.glob(
+    os.path.join(os.path.dirname(__file__), "../resources/vhdl/neorv32_core/*.vhd")
+)
 
 
 class TestHDLRoundtrip:
@@ -102,10 +102,12 @@ end architecture behavioral;
         # Extract entity part for comparison (simplified for test)
         entity_start = original_content.find("entity")
         entity_end = original_content.find("end entity")
-        original_entity = original_content[entity_start : entity_end + len("end entity counter;")]
+        original_entity = original_content[
+            entity_start : entity_end + len("end entity counter;")
+        ]
 
         # Compare essential parts of the entity declarations
-        norm_original = self._normalize_whitespace(original_entity)
+        self._normalize_whitespace(original_entity)
         norm_generated = self._normalize_whitespace(generated_vhdl)
 
         # Essential content checks
@@ -117,7 +119,9 @@ end architecture behavioral;
         assert "count : out std_logic_vector(7 downto 0)" in norm_generated
         assert "end entity counter" in norm_generated
 
-    @pytest.mark.skipif(not NEORV32_FILES, reason="NEORV32 VHDL files not found in resources")
+    @pytest.mark.skipif(
+        not NEORV32_FILES, reason="NEORV32 VHDL files not found in resources"
+    )
     @pytest.mark.parametrize(
         "vhdl_file",
         NEORV32_FILES,
@@ -180,7 +184,9 @@ end architecture behavioral;
                         f.write(f"Ports ({len(ip_core.ports)}):\n")
                         for port in ip_core.ports:
                             port_type_str = self._get_port_type_description(port)
-                            f.write(f"  - {port.name} : {port.direction} {port_type_str}\n")
+                            f.write(
+                                f"  - {port.name} : {port.direction} {port_type_str}\n"
+                            )
                     else:
                         f.write("No ports found in entity\n")
 
@@ -191,16 +197,20 @@ end architecture behavioral;
                         f.write(generated_vhdl)
 
                         # Write the generated VHDL to a separate output file
-                        output_file = os.path.join(output_dir, f"generated_{file_basename}")
+                        output_file = os.path.join(
+                            output_dir, f"generated_{file_basename}"
+                        )
                         with open(output_file, "w") as vhdl_out:
                             vhdl_out.write(generated_vhdl)
 
                         # Basic validation of generated content
                         assert (
-                            f"entity {ip_core.vlnv.name.lower()}" in generated_vhdl.lower()
+                            f"entity {ip_core.vlnv.name.lower()}"
+                            in generated_vhdl.lower()
                         ), f"Missing entity declaration in generated VHDL for {file_basename}"
                         assert (
-                            f"end entity {ip_core.vlnv.name.lower()}" in generated_vhdl.lower()
+                            f"end entity {ip_core.vlnv.name.lower()}"
+                            in generated_vhdl.lower()
                         ), f"Missing end entity in generated VHDL for {file_basename}"
 
                         # Type validation - check if all original port types are properly represented
@@ -215,14 +225,17 @@ end architecture behavioral;
                                 else str(port.direction).lower()
                             )
                             assert (
-                                f"{port_name} : {direction_str}" in generated_vhdl.lower()
+                                f"{port_name} : {direction_str}"
+                                in generated_vhdl.lower()
                             ), f"Port {port_name} direction {direction_str} not found in generated VHDL"
 
                             # Check type - this is a basic check that could be improved
-                            port_type_str = self._get_port_type_description(port).lower()
+                            port_type_str = self._get_port_type_description(
+                                port
+                            ).lower()
                             # Remove whitespace for comparison
-                            clean_vhdl = "".join(generated_vhdl.lower().split())
-                            clean_port = f"{port_name}:{direction_str.replace(' ','')}{port_type_str.replace(' ', '')}"
+                            "".join(generated_vhdl.lower().split())
+                            f"{port_name}:{direction_str.replace(' ', '')}{port_type_str.replace(' ', '')}"
 
                             # Basic inclusion check instead of strict spaceless match might be safer with type string variations
                             assert port_name in generated_vhdl.lower()
@@ -246,14 +259,20 @@ end architecture behavioral;
                 elif "package" in result and result["package"] is not None:
                     # For package files, just validate that we parsed something
                     package_name = result["package"].get("name")
-                    assert package_name, f"Failed to parse package name from {file_basename}"
+                    assert (
+                        package_name
+                    ), f"Failed to parse package name from {file_basename}"
                     f.write(f"Package: {package_name}\n")
                     f.write("Parsed successfully\n")
-                    print(f"✅ Successfully parsed package {package_name} from {file_basename}")
+                    print(
+                        f"✅ Successfully parsed package {package_name} from {file_basename}"
+                    )
 
                 elif expected_entity_name:
                     # We should have detected an entity but didn't
-                    f.write(f"❌ PARSER ERROR: Failed to detect entity {expected_entity_name}\n")
+                    f.write(
+                        f"❌ PARSER ERROR: Failed to detect entity {expected_entity_name}\n"
+                    )
                     pytest.fail(
                         f"Parser failed to detect entity {expected_entity_name} in {file_basename}"
                     )
@@ -261,7 +280,9 @@ end architecture behavioral;
                 else:
                     # Some files might not have entities or packages
                     f.write("No entity or package found\n")
-                    print(f"⚠️ File {file_basename} parsed but no entity or package found")
+                    print(
+                        f"⚠️ File {file_basename} parsed but no entity or package found"
+                    )
 
         except Exception as e:
             # For errors, write an error report
@@ -277,4 +298,8 @@ end architecture behavioral;
             return port.type
 
         # Fallback to width-based guess if type string is empty (shouldn't happen with new parser)
-        return f"std_logic" if port.width == 1 else f"std_logic_vector({port.width - 1} downto 0)"
+        return (
+            "std_logic"
+            if port.width == 1
+            else f"std_logic_vector({port.width - 1} downto 0)"
+        )

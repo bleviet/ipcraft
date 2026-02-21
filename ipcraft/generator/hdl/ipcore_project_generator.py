@@ -11,8 +11,8 @@ Orchestrates the generation of all files needed for an IP core project:
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import warnings
 
-from jinja2 import Environment, FileSystemLoader
 
 from ipcraft.generator.base_generator import BaseGenerator
 from ipcraft.generator.hdl.fileset_manager import FileSetManagerMixin
@@ -20,7 +20,6 @@ from ipcraft.generator.hdl.testbench_generator import TestbenchGenerationMixin
 from ipcraft.generator.hdl.vendor_generator import VendorGenerationMixin
 from ipcraft.model.bus_library import get_bus_library
 from ipcraft.model.core import IpCore
-from ipcraft.model.memory_map import BitFieldDef, MemoryMap, RegisterDef
 from ipcraft.utils import enum_value, normalize_bus_type_key, parse_bit_range
 
 
@@ -159,8 +158,14 @@ class IpCoreProjectGenerator(
                             "name": field.name,
                             "offset": field.bit_offset,
                             "width": field.bit_width,
-                            "access": acc_str.lower() if acc_str else reg_acc_str.lower(),
-                            "reset_value": field.reset_value if field.reset_value is not None else 0,
+                            "access": (
+                                acc_str.lower() if acc_str else reg_acc_str.lower()
+                            ),
+                            "reset_value": (
+                                field.reset_value
+                                if field.reset_value is not None
+                                else 0
+                            ),
                             "description": field.description or "",
                         }
                     )
@@ -265,7 +270,10 @@ class IpCoreProjectGenerator(
                     name_pattern = array_def.naming_pattern or f"{iface.name}_{{index}}"
                     name = name_pattern.format(index=idx)
 
-                    prefix_pattern = array_def.physical_prefix_pattern or f"{iface.physical_prefix}{{index}}_"
+                    prefix_pattern = (
+                        array_def.physical_prefix_pattern
+                        or f"{iface.physical_prefix}{{index}}_"
+                    )
                     prefix = prefix_pattern.format(index=idx)
 
                     expanded.append(
@@ -295,7 +303,9 @@ class IpCoreProjectGenerator(
                 )
         return expanded
 
-    def _get_template_context(self, ip_core: IpCore, bus_type: str = "axil") -> Dict[str, Any]:
+    def _get_template_context(
+        self, ip_core: IpCore, bus_type: str = "axil"
+    ) -> Dict[str, Any]:
         """Build common template context."""
         registers = self._prepare_registers(ip_core)
 
@@ -308,7 +318,9 @@ class IpCoreProjectGenerator(
         # Extract clock and reset information
         clock_port = ip_core.clocks[0].name if ip_core.clocks else "clk"
         reset_port = ip_core.resets[0].name if ip_core.resets else "rst"
-        reset_polarity = ip_core.resets[0].polarity.value if ip_core.resets else "activeHigh"
+        reset_polarity = (
+            ip_core.resets[0].polarity.value if ip_core.resets else "activeHigh"
+        )
         reset_active_high = "High" in reset_polarity
 
         # Generic expansion of ALL bus interfaces
@@ -485,7 +497,9 @@ class IpCoreProjectGenerator(
         files[f"rtl/{name}_pkg.vhd"] = self.generate_package(ip_core)
         files[f"rtl/{name}.vhd"] = self.generate_top(ip_core, bus_type)
         files[f"rtl/{name}_core.vhd"] = self.generate_core(ip_core)
-        files[f"rtl/{name}_{bus_type}.vhd"] = self.generate_bus_wrapper(ip_core, bus_type)
+        files[f"rtl/{name}_{bus_type}.vhd"] = self.generate_bus_wrapper(
+            ip_core, bus_type
+        )
 
         if include_regs:
             files[f"rtl/{name}_regs.vhd"] = self.generate_register_file(ip_core)
@@ -493,36 +507,43 @@ class IpCoreProjectGenerator(
         # Testbench files
         if include_testbench:
             files[f"tb/{name}_test.py"] = self.generate_cocotb_test(ip_core, bus_type)
-            files[f"tb/Makefile"] = self.generate_cocotb_makefile(ip_core, bus_type)
+            files["tb/Makefile"] = self.generate_cocotb_makefile(ip_core, bus_type)
 
         # Vendor integration files
         if vendor in ["intel", "both"]:
-            files[f"intel/{name}_hw.tcl"] = self.generate_intel_hw_tcl(ip_core, bus_type)
+            files[f"intel/{name}_hw.tcl"] = self.generate_intel_hw_tcl(
+                ip_core, bus_type
+            )
 
         if vendor in ["xilinx", "both"]:
-            files[f"xilinx/component.xml"] = self.generate_xilinx_component_xml(ip_core)
+            files["xilinx/component.xml"] = self.generate_xilinx_component_xml(ip_core)
             # Generate XGUI file with version in filename
             version_str = ip_core.vlnv.version.replace(".", "_")
-            files[f"xilinx/xgui/{name}_v{version_str}.tcl"] = self.generate_xilinx_xgui(ip_core)
+            files[f"xilinx/xgui/{name}_v{version_str}.tcl"] = self.generate_xilinx_xgui(
+                ip_core
+            )
 
         return files
 
 
-# Backward compatibility alias
-VHDLGenerator = IpCoreProjectGenerator
+def __getattr__(name: str) -> Any:
+    """Handle deprecated module attributes."""
+    if name == "VHDLGenerator":
+        warnings.warn(
+            "'VHDLGenerator' is deprecated. Use 'IpCoreProjectGenerator' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return IpCoreProjectGenerator
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 # Backward compatibility: standalone function
 def generate_vhdl(ip_core: IpCore, bus_type: str = "axil") -> Dict[str, str]:
-    """
-    Generate VHDL files for an IP core.
-
-    Args:
-        ip_core: IP core definition
-        bus_type: Bus interface type
-
-    Returns:
-        Dictionary mapping filename to content
-    """
-    generator = IpCoreProjectGenerator()
-    return generator.generate_all(ip_core, bus_type)
+    """Deprecated. Use ``IpCoreProjectGenerator().generate_all()`` instead."""
+    warnings.warn(
+        "'generate_vhdl()' is deprecated. Use IpCoreProjectGenerator().generate_all().",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return IpCoreProjectGenerator().generate_all(ip_core, bus_type)

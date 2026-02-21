@@ -17,7 +17,7 @@ from ipcraft.model.base import VLNV
 from ipcraft.model.bus import BusInterface
 from ipcraft.model.clock_reset import Clock, Reset
 from ipcraft.model.core import IpCore
-from ipcraft.model.port import Port, PortDirection
+from ipcraft.model.port import Port
 from ipcraft.parser.hdl.bus_detector import BusInterfaceDetector
 from ipcraft.parser.hdl.vhdl_parser import VHDLParser
 
@@ -71,7 +71,9 @@ class IpYamlGenerator:
         ip_core = result["entity"]
 
         # Update VLNV with user-provided values
-        ip_core.vlnv = VLNV(vendor=vendor, library=library, name=ip_core.vlnv.name, version=version)
+        ip_core.vlnv = VLNV(
+            vendor=vendor, library=library, name=ip_core.vlnv.name, version=version
+        )
 
         # Detect bus interfaces
         bus_interfaces = []
@@ -101,9 +103,13 @@ class IpYamlGenerator:
             vhdl_path=vhdl_path,
         )
 
-        return yaml.dump(yaml_data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        return yaml.dump(
+            yaml_data, default_flow_style=False, sort_keys=False, allow_unicode=True
+        )
 
-    def _get_bus_port_names(self, bus_interfaces: List[BusInterface], ports: List[Port]) -> set:
+    def _get_bus_port_names(
+        self, bus_interfaces: List[BusInterface], ports: List[Port]
+    ) -> set:
         """Get names of ports that belong to detected bus interfaces."""
         bus_port_names = set()
         for bus in bus_interfaces:
@@ -137,12 +143,18 @@ class IpYamlGenerator:
 
         # Clocks
         if clocks:
-            data["clocks"] = [{"name": c.name, "description": c.description or ""} for c in clocks]
+            data["clocks"] = [
+                {"name": c.name, "description": c.description or ""} for c in clocks
+            ]
 
         # Resets
         if resets:
             data["resets"] = [
-                {"name": r.name, "polarity": r.polarity.value, "description": r.description or ""}
+                {
+                    "name": r.name,
+                    "polarity": r.polarity.value,
+                    "description": r.description or "",
+                }
                 for r in resets
             ]
 
@@ -152,11 +164,15 @@ class IpYamlGenerator:
 
         # Bus interfaces
         if bus_interfaces:
-            data["busInterfaces"] = [self._bus_interface_to_dict(b) for b in bus_interfaces]
+            data["busInterfaces"] = [
+                self._bus_interface_to_dict(b) for b in bus_interfaces
+            ]
 
         # Parameters (from generics)
         if ip_core.parameters:
-            data["parameters"] = [self._parameter_to_dict(p) for p in ip_core.parameters]
+            data["parameters"] = [
+                self._parameter_to_dict(p) for p in ip_core.parameters
+            ]
 
         # Memory maps reference
         if memmap_path:
@@ -216,7 +232,9 @@ class IpYamlGenerator:
             return None
 
         # Match pattern: (PARAM-1 downto 0) or (PARAM downto 0)
-        match = re.search(r"\((\w+)(?:\s*-\s*1)?\s+downto\s+0\)", type_str, re.IGNORECASE)
+        match = re.search(
+            r"\((\w+)(?:\s*-\s*1)?\s+downto\s+0\)", type_str, re.IGNORECASE
+        )
         if match:
             param = match.group(1)
             # If it's a number, return None (let caller use port.width)
@@ -276,7 +294,8 @@ class IpYamlGenerator:
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Generate IP core YAML from VHDL source file", prog="ip_yaml_generator"
+        description="Generate IP core YAML from VHDL source file",
+        prog="ip_yaml_generator",
     )
     parser.add_argument("vhdl_file", type=Path, help="Path to VHDL source file")
     parser.add_argument(
@@ -289,15 +308,23 @@ def main():
     parser.add_argument(
         "--vendor", type=str, default="user", help="VLNV vendor name (default: user)"
     )
-    parser.add_argument("--library", type=str, default="ip", help="VLNV library name (default: ip)")
-    parser.add_argument("--version", type=str, default="1.0", help="VLNV version (default: 1.0)")
     parser.add_argument(
-        "--no-detect-bus", action="store_true", help="Disable automatic bus interface detection"
+        "--library", type=str, default="ip", help="VLNV library name (default: ip)"
+    )
+    parser.add_argument(
+        "--version", type=str, default="1.0", help="VLNV version (default: 1.0)"
+    )
+    parser.add_argument(
+        "--no-detect-bus",
+        action="store_true",
+        help="Disable automatic bus interface detection",
     )
     parser.add_argument(
         "--memmap", type=Path, default=None, help="Path to memory map file to reference"
     )
-    parser.add_argument("-f", "--force", action="store_true", help="Overwrite existing output file")
+    parser.add_argument(
+        "-f", "--force", action="store_true", help="Overwrite existing output file"
+    )
 
     args = parser.parse_args()
 

@@ -16,7 +16,11 @@ class TestIpCoreProjectGeneratorE2E:
     @pytest.fixture
     def example_dir(self):
         """Get path to example YAML files."""
-        return Path(__file__).parent.parent.parent.parent.parent / "ipcraft-spec" / "examples"
+        return (
+            Path(__file__).parent.parent.parent.parent.parent
+            / "ipcraft-spec"
+            / "examples"
+        )
 
     @pytest.fixture
     def parser(self):
@@ -154,7 +158,11 @@ class TestIpCoreProjectGeneratorSyntaxValidation:
     @pytest.fixture
     def example_dir(self):
         """Get path to example YAML files."""
-        return Path(__file__).parent.parent.parent.parent.parent / "ipcraft-spec" / "examples"
+        return (
+            Path(__file__).parent.parent.parent.parent.parent
+            / "ipcraft-spec"
+            / "examples"
+        )
 
     @pytest.fixture
     def parser(self):
@@ -169,7 +177,9 @@ class TestIpCoreProjectGeneratorSyntaxValidation:
     def _check_ghdl_available(self):
         """Check if GHDL is available."""
         try:
-            result = subprocess.run(["ghdl", "--version"], capture_output=True, timeout=5)
+            result = subprocess.run(
+                ["ghdl", "--version"], capture_output=True, timeout=5
+            )
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return False
@@ -203,7 +213,9 @@ class TestIpCoreProjectGeneratorSyntaxValidation:
                     return (0, f)
                 elif any(suffix in f for suffix in ["_regfile.vhd", "_regs.vhd"]):
                     return (1, f)
-                elif any(suffix in f for suffix in ["_axil.vhd", "_avmm.vhd", "_core.vhd"]):
+                elif any(
+                    suffix in f for suffix in ["_axil.vhd", "_avmm.vhd", "_core.vhd"]
+                ):
                     return (2, f)
                 else:
                     return (3, f)
@@ -227,7 +239,9 @@ class TestIpCoreProjectGeneratorSyntaxValidation:
 
     def test_minimal_yaml_syntax(self, example_dir, parser, generator):
         """Test that minimal.ip.yml generates syntactically correct VHDL."""
-        pytest.skip("Minimal IP without registers - generator not designed for this case")
+        pytest.skip(
+            "Minimal IP without registers - generator not designed for this case"
+        )
         if not self._check_ghdl_available():
             pytest.skip("GHDL not available")
 

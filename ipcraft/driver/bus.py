@@ -10,7 +10,12 @@ class CocotbBus(AsyncBusInterface):
     """Bus interface implementation for Cocotb simulations using AXI-Lite or Avalon-MM."""
 
     def __init__(
-        self, dut: Any, bus_name: str, clock: Any, reset: Any = None, bus_type: str = "axil"
+        self,
+        dut: Any,
+        bus_name: str,
+        clock: Any,
+        reset: Any = None,
+        bus_type: str = "axil",
     ):
         self.bus_type = bus_type
 
@@ -22,7 +27,9 @@ class CocotbBus(AsyncBusInterface):
                     reset = getattr(dut, rst_name)
                     break
             if reset is None:
-                raise AttributeError(f"No reset signal found. Please provide reset explicitly.")
+                raise AttributeError(
+                    "No reset signal found. Please provide reset explicitly."
+                )
 
         if bus_type == "axil":
             # delayed import to avoiding forcing cocotb dependency on standard users

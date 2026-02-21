@@ -58,7 +58,11 @@ class BitField:
         """Validate bit field parameters."""
         valid_access = {at.value for at in RuntimeAccessType}
         # Check if access is string and valid
-        acc_val = self.access.value if isinstance(self.access, RuntimeAccessType) else self.access
+        acc_val = (
+            self.access.value
+            if isinstance(self.access, RuntimeAccessType)
+            else self.access
+        )
         if acc_val not in valid_access:
             raise ValueError(f"access must be one of {valid_access}")
 
@@ -69,7 +73,9 @@ class BitField:
         if self.offset < 0:
             raise ValueError(f"Bit field '{self.name}' offset must be non-negative")
         if self.offset + self.width > 32:
-            raise ValueError(f"Bit field '{self.name}' extends beyond 32-bit register boundary")
+            raise ValueError(
+                f"Bit field '{self.name}' extends beyond 32-bit register boundary"
+            )
 
     def insert_value(self, register_value: int, field_value: int) -> int:
         """Insert this field's value into a complete register value."""
@@ -314,7 +320,9 @@ class Register(_RegisterBase):
                 self.name,
             )
 
-        reg_val_to_write = _build_rmw_value(self._fields, {field_name: value}, current_reg_val)
+        reg_val_to_write = _build_rmw_value(
+            self._fields, {field_name: value}, current_reg_val
+        )
         self.write(reg_val_to_write)
 
     def read_all_fields(self) -> Dict[str, int]:
@@ -392,7 +400,9 @@ class AsyncRegister(_RegisterBase):
                 self.name,
             )
 
-        reg_val_to_write = _build_rmw_value(self._fields, {field_name: value}, current_reg_val)
+        reg_val_to_write = _build_rmw_value(
+            self._fields, {field_name: value}, current_reg_val
+        )
         await self.write(reg_val_to_write)
 
 

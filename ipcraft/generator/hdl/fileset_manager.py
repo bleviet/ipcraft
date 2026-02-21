@@ -45,7 +45,9 @@ class FileSetManagerMixin:
             {
                 "name": fs.name,
                 "description": fs.description,
-                "files": [{"path": file.path, "type": file.type.value} for file in fs.files],
+                "files": [
+                    {"path": file.path, "type": file.type.value} for file in fs.files
+                ],
             }
             for fs in expected_filesets
         ]
@@ -79,7 +81,9 @@ class FileSetManagerMixin:
             rtl_files.append(File(path=f"rtl/{name}_avmm.vhd", type=FileType.VHDL))
 
         rtl_files.append(File(path=f"rtl/{name}.vhd", type=FileType.VHDL))
-        filesets.append(FileSet(name="RTL_Sources", description="RTL Sources", files=rtl_files))
+        filesets.append(
+            FileSet(name="RTL_Sources", description="RTL Sources", files=rtl_files)
+        )
 
         if include_testbench:
             sim_files = [
@@ -88,23 +92,32 @@ class FileSetManagerMixin:
             ]
             filesets.append(
                 FileSet(
-                    name="Simulation_Resources", description="Simulation Files", files=sim_files
+                    name="Simulation_Resources",
+                    description="Simulation Files",
+                    files=sim_files,
                 )
             )
 
         if vendor != "none":
             integration_files: List[File] = []
             if vendor in ["intel", "both"]:
-                integration_files.append(File(path=f"intel/{name}_hw.tcl", type=FileType.TCL))
+                integration_files.append(
+                    File(path=f"intel/{name}_hw.tcl", type=FileType.TCL)
+                )
             if vendor in ["xilinx", "both"]:
-                integration_files.append(File(path="xilinx/component.xml", type=FileType.XML))
+                integration_files.append(
+                    File(path="xilinx/component.xml", type=FileType.XML)
+                )
                 xgui_files = [
                     file_path
                     for file_path in generated_files.keys()
-                    if file_path.startswith("xilinx/xgui/") and file_path.endswith(".tcl")
+                    if file_path.startswith("xilinx/xgui/")
+                    and file_path.endswith(".tcl")
                 ]
                 if xgui_files:
-                    integration_files.append(File(path=xgui_files[0], type=FileType.TCL))
+                    integration_files.append(
+                        File(path=xgui_files[0], type=FileType.TCL)
+                    )
 
             if integration_files:
                 filesets.append(
@@ -117,7 +130,9 @@ class FileSetManagerMixin:
 
         return filesets
 
-    def _filesets_match(self, existing: Optional[List[FileSet]], expected: List[FileSet]) -> bool:
+    def _filesets_match(
+        self, existing: Optional[List[FileSet]], expected: List[FileSet]
+    ) -> bool:
         """Return ``True`` when existing ``fileSets`` already match expected values."""
         if not existing and not expected:
             return True

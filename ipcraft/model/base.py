@@ -76,7 +76,11 @@ class VLNV(BaseModel):
     name: str = Field(..., description="IP core name (e.g., 'my_timer_core')")
     version: str = Field(..., description="Version string (e.g., '1.2.0')")
 
-    model_config = {"frozen": True, "alias_generator": to_camel, "populate_by_name": True}
+    model_config = {
+        "frozen": True,
+        "alias_generator": to_camel,
+        "populate_by_name": True,
+    }
 
     @field_validator("vendor", "library", "name", "version")
     @classmethod
@@ -146,7 +150,9 @@ class Parameter(StrictModel):
 
     name: str = Field(..., description="Parameter name")
     value: Any = Field(..., description="Default value")
-    data_type: ParameterType = Field(default=ParameterType.INTEGER, description="Data type")
+    data_type: ParameterType = Field(
+        default=ParameterType.INTEGER, description="Data type"
+    )
     description: str = Field(default="", description="Parameter description")
 
     # This allows the Parameter class to accept raw strings (including mixed case Integer, INTEGER etc.) and

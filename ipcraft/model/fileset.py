@@ -57,8 +57,12 @@ class File(StrictModel):
     path: str = Field(..., description="Relative or absolute file path")
     type: FileType = Field(..., description="File type")
     description: str = Field(default="", description="File description")
-    is_include_file: bool = Field(default=False, description="Whether file is an include file")
-    logical_name: str = Field(default="", description="Logical name (e.g., library name for VHDL)")
+    is_include_file: bool = Field(
+        default=False, description="Whether file is an include file"
+    )
+    logical_name: str = Field(
+        default="", description="Logical name (e.g., library name for VHDL)"
+    )
 
     @field_validator("path")
     @classmethod

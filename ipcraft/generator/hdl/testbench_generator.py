@@ -32,7 +32,9 @@ class TestbenchGenerationMixin:
         context = self._get_template_context(ip_core)
         return template.render(**context)
 
-    def generate_testbench(self, ip_core: IpCore, bus_type: str = "axil") -> Dict[str, str]:
+    def generate_testbench(
+        self, ip_core: IpCore, bus_type: str = "axil"
+    ) -> Dict[str, str]:
         """Generate testbench files for cocotb simulation.
 
         Args:

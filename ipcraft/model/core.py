@@ -28,7 +28,9 @@ class IpCore(StrictModel):
     """
 
     # Metadata
-    api_version: str = Field(..., description="Schema version (e.g., 'my-ip-schema/v2.3')")
+    api_version: str = Field(
+        ..., description="Schema version (e.g., 'my-ip-schema/v2.3')"
+    )
     vlnv: VLNV = Field(..., description="Unique identifier")
     description: str = Field(default="", description="IP core description")
 
@@ -41,13 +43,17 @@ class IpCore(StrictModel):
     )
 
     # Memory maps
-    memory_maps: List[MemoryMap] = Field(default_factory=list, description="Memory maps")
+    memory_maps: List[MemoryMap] = Field(
+        default_factory=list, description="Memory maps"
+    )
 
     # Files
     file_sets: List[FileSet] = Field(default_factory=list, description="File sets")
 
     # Parameters
-    parameters: List[Parameter] = Field(default_factory=list, description="Generics/parameters")
+    parameters: List[Parameter] = Field(
+        default_factory=list, description="Generics/parameters"
+    )
 
     # Bus library reference
     use_bus_library: Optional[str] = Field(
@@ -67,7 +73,9 @@ class IpCore(StrictModel):
     @staticmethod
     def _find_by_name(items: Sequence[NamedItem], name: str) -> Optional[NamedItem]:
         """Return the first item with a matching ``name`` attribute."""
-        return next((item for item in items if getattr(item, "name", None) == name), None)
+        return next(
+            (item for item in items if getattr(item, "name", None) == name), None
+        )
 
     def get_clock(self, name: str) -> Optional[Clock]:
         """Get clock by logical name."""

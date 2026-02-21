@@ -36,7 +36,9 @@ class TestTemplateRendering:
         """Create a simple IP core for testing."""
         return IpCore(
             api_version="test/v1.0",
-            vlnv=VLNV(vendor="test", library="lib", name="template_test", version="1.0"),
+            vlnv=VLNV(
+                vendor="test", library="lib", name="template_test", version="1.0"
+            ),
             description="Template test IP",
             ports=[],
             parameters=[],
@@ -267,7 +269,9 @@ class TestTemplateRendering:
     def test_all_templates_render_simple(self, generator, simple_ip_core):
         """Test all templates render with simple IP core."""
         # Generate all files
-        files = generator.generate_all(simple_ip_core, bus_type="axil", include_regs=False)
+        files = generator.generate_all(
+            simple_ip_core, bus_type="axil", include_regs=False
+        )
 
         # Should have at least package, top, core, bus wrapper
         assert len(files) >= 4
@@ -277,10 +281,14 @@ class TestTemplateRendering:
             assert content is not None, f"{filename} is None"
             assert len(content) > 0, f"{filename} is empty"
 
-    def test_all_templates_render_with_registers(self, generator, ip_core_with_registers):
+    def test_all_templates_render_with_registers(
+        self, generator, ip_core_with_registers
+    ):
         """Test all templates render with registers."""
         # Generate all files
-        files = generator.generate_all(ip_core_with_registers, bus_type="axil", include_regs=True)
+        files = generator.generate_all(
+            ip_core_with_registers, bus_type="axil", include_regs=True
+        )
 
         # Should have package, top, core, bus wrapper, regfile
         assert len(files) >= 5

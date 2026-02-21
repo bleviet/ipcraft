@@ -19,9 +19,7 @@ class TestParseListHelper:
     def test_parse_list_error_includes_index(self):
         data = [{"v": 1}, {"bad": "no_key"}]
         with pytest.raises(ParseError, match=r"item\[1\]"):
-            self.parser._parse_list(
-                data, "item", lambda d: d["v"], self.dummy_path
-            )
+            self.parser._parse_list(data, "item", lambda d: d["v"], self.dummy_path)
 
     def test_parse_list_empty(self):
         result = self.parser._parse_list([], "item", lambda d: d, self.dummy_path)

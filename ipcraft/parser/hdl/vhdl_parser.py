@@ -75,12 +75,16 @@ class VHDLParser:
         self.simple_type_name = Word(alphas + "_", alphanums + "_.")
 
         # Use nestedExpr to correctly handle ranges with parentheses, including nested ones
-        self.range_type = Combine(self.simple_type_name + original_text_for(nestedExpr()))
+        self.range_type = Combine(
+            self.simple_type_name + original_text_for(nestedExpr())
+        )
         self.data_type = self.range_type | self.simple_type_name
 
         # Default value for generics - captures everything after ":=" until semicolon or closing paren
         # Enhanced to handle nested expressions like (others => '0')
-        self.default_value = Suppress(":=") + original_text_for(nestedExpr() | CharsNotIn(";)"))
+        self.default_value = Suppress(":=") + original_text_for(
+            nestedExpr() | CharsNotIn(";)")
+        )
 
         # Enhanced port declaration parser
         self.port_decl = Group(
@@ -199,7 +203,9 @@ class VHDLParser:
                         ports.append(port)
 
                 # Create basic VLNV for parsed core
-                vlnv = VLNV(vendor="parsed", library="vhdl", name=entity_name, version="1.0")
+                vlnv = VLNV(
+                    vendor="parsed", library="vhdl", name=entity_name, version="1.0"
+                )
 
                 # Create IPCore directly
                 ip_core = IpCore(
@@ -238,7 +244,7 @@ class VHDLParser:
                     "name": arch_data.get("arch_name"),
                     "entity": arch_data.get("arch_entity"),
                 }
-        except ParseBaseException as e:
+        except ParseBaseException:
             # Fall back to regex for architecture
             arch_match = re.search(
                 r"architecture\s+(\w+)\s+of\s+(\w+)\s+is",
@@ -257,7 +263,7 @@ class VHDLParser:
             if package_match and len(package_match) > 0:
                 package_data = package_match[0]
                 result["package"] = {"name": package_data.get("package_name")}
-        except ParseBaseException as e:
+        except ParseBaseException:
             # Fall back to regex for package
             package_match = re.search(
                 r"package\s+(\w+)\s+is", vhdl_text_clean, re.IGNORECASE | re.DOTALL
@@ -396,7 +402,9 @@ class VHDLParser:
             try:
                 # Find the complete entity definition including generics and ports
                 entity_pattern = rf"entity\s+{re.escape(expected_entity_name)}\s+is\s+(.*?)\s*end\s+(?:entity\s+)?{re.escape(expected_entity_name)}?"
-                entity_match = re.search(entity_pattern, vhdl_text_clean, re.IGNORECASE | re.DOTALL)
+                entity_match = re.search(
+                    entity_pattern, vhdl_text_clean, re.IGNORECASE | re.DOTALL
+                )
 
                 if entity_match:
                     entity_body = entity_match.group(1)
@@ -455,10 +463,14 @@ class VHDLParser:
                                         range_match = re.search(r"\((.*?)\)", p_type)
                                         if range_match:
                                             r_str = range_match.group(1)
-                                            downto = re.search(r"(\d+)\s+downto\s+(\d+)", r_str)
+                                            downto = re.search(
+                                                r"(\d+)\s+downto\s+(\d+)", r_str
+                                            )
                                             if downto:
                                                 width = (
-                                                    int(downto.group(1)) - int(downto.group(2)) + 1
+                                                    int(downto.group(1))
+                                                    - int(downto.group(2))
+                                                    + 1
                                                 )
 
                                         ports.append(
@@ -472,12 +484,15 @@ class VHDLParser:
 
                     # Create VLNV
                     vlnv = VLNV(
-                        vendor="parsed", library="vhdl", name=expected_entity_name, version="1.0"
+                        vendor="parsed",
+                        library="vhdl",
+                        name=expected_entity_name,
+                        version="1.0",
                     )
                     ip_core = IpCore(
                         api_version="1.0",
                         vlnv=vlnv,
-                        description=f"Parsed from VHDL (regex fallback)",
+                        description="Parsed from VHDL (regex fallback)",
                         ports=ports,
                     )
 

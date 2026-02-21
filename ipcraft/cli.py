@@ -14,6 +14,7 @@ Subcommands:
     validate    Validate IP core YAML (future)
     new         Create new IP core from template (future)
 """
+
 import argparse
 import json
 import sys
@@ -21,14 +22,16 @@ from pathlib import Path
 
 from ipcraft.generator.hdl.ipcore_project_generator import IpCoreProjectGenerator
 from ipcraft.generator.yaml.ip_yaml_generator import IpYamlGenerator
-from ipcraft.model.bus_library import BusLibrary, get_bus_library
+from ipcraft.model.bus_library import get_bus_library
 from ipcraft.parser.yaml.ip_yaml_parser import YamlIpCoreParser
+
 
 def get_bus_type(ip_core) -> str:
     """Extract bus type from IP core's bus interfaces."""
     for bus in ip_core.bus_interfaces:
         if bus.mode == "slave" and bus.memory_map_ref:
             from ipcraft.utils import bus_type_to_generator_code, enum_value
+
             bus_type_str = enum_value(bus.type)
             return bus_type_to_generator_code(bus_type_str)
     return "axil"
@@ -44,7 +47,7 @@ def log(msg: str, use_progress: bool, use_json: bool):
 
 def cmd_generate(args):
     """Generate VHDL files from IP core YAML."""
-    output_base = args.output or os.path.dirname(args.input)
+    output_base = Path(args.output) if args.output else Path(args.input).parent
 
     try:
         log("Parsing IP core YAML...", args.progress, args.json)
@@ -67,16 +70,16 @@ def cmd_generate(args):
         log(f"Writing {len(all_files)} files...", args.progress, args.json)
         written = {}
         for filepath, content in all_files.items():
-            full_path = os.path.join(output_base, filepath)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            Path(full_path).write_text(content)
-            written[filepath] = full_path
+            full_path = output_base / filepath
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            full_path.write_text(content)
+            written[filepath] = str(full_path)
             log(f"  Written: {filepath}", args.progress, args.json)
 
         # Update IP core YAML with fileSets
         if args.update_yaml:
             gen.update_ipcore_filesets(
-                os.path.abspath(args.input),
+                str(Path(args.input).resolve()),
                 all_files,
                 include_regs=args.regs,
                 vendor=args.vendor,
@@ -89,7 +92,12 @@ def cmd_generate(args):
             # JSON output for VS Code integration
             print(
                 json.dumps(
-                    {"success": True, "files": written, "count": len(written), "busType": bus_type}
+                    {
+                        "success": True,
+                        "files": written,
+                        "count": len(written),
+                        "busType": bus_type,
+                    }
                 )
             )
         else:
@@ -97,19 +105,19 @@ def cmd_generate(args):
             name = ip_core.vlnv.name if ip_core.vlnv else "ipcore"
             print(f"\n✓ Generated {len(all_files)} files to: {output_base}")
             print(f"\nDirectory structure for '{name}':")
-            print(f"  rtl/")
+            print("  rtl/")
             print(f"    {name}_pkg.vhd      - Package (types, records)")
             print(f"    {name}.vhd          - Top-level entity")
             print(f"    {name}_core.vhd     - Core logic")
             print(f"    {name}_axil.vhd     - AXI-Lite bus wrapper")
             print(f"    {name}_regs.vhd     - Register bank")
-            print(f"  tb/")
+            print("  tb/")
             print(f"    {name}_test.py      - Cocotb testbench")
-            print(f"    Makefile            - Simulation makefile")
-            print(f"  intel/")
+            print("    Makefile            - Simulation makefile")
+            print("  intel/")
             print(f"    {name}_hw.tcl       - Platform Designer")
-            print(f"  xilinx/")
-            print(f"    component.xml       - IP-XACT")
+            print("  xilinx/")
+            print("    component.xml       - IP-XACT")
             print(f"    xgui/{name}_v*.tcl  - Vivado GUI")
 
     except Exception as e:
@@ -214,7 +222,7 @@ def cmd_list_buses(args):
                     sys.exit(1)
 
                 print(f"\n{defn.key} - {defn.bus_type.full_name}")
-                print(f"\nSuggested prefixes:")
+                print("\nSuggested prefixes:")
                 prefixes = SUGGESTED_PREFIXES.get(defn.key, {})
                 for mode, prefix in prefixes.items():
                     print(f"  {mode:8} {prefix}")
@@ -238,7 +246,9 @@ def cmd_list_buses(args):
                 for key in bus_types:
                     info = library.get_bus_info(key)
                     print(f"  {key:12} - {info['vlnv']}")
-                print("\nUse 'list-buses <TYPE>' for details, add --ports for port list")
+                print(
+                    "\nUse 'list-buses <TYPE>' for details, add --ports for port list"
+                )
 
     except Exception as e:
         if args.json:
@@ -255,9 +265,13 @@ def main():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # generate subcommand
-    gen_parser = subparsers.add_parser("generate", help="Generate VHDL from IP core YAML")
+    gen_parser = subparsers.add_parser(
+        "generate", help="Generate VHDL from IP core YAML"
+    )
     gen_parser.add_argument("input", help="IP core YAML file")
-    gen_parser.add_argument("--output", "-o", help="Output directory (default: same as input)")
+    gen_parser.add_argument(
+        "--output", "-o", help="Output directory (default: same as input)"
+    )
     gen_parser.add_argument(
         "--vendor",
         default="both",
@@ -272,30 +286,50 @@ def main():
     )
     gen_parser.add_argument("--no-testbench", dest="testbench", action="store_false")
     gen_parser.add_argument(
-        "--regs", action="store_true", default=True, help="Include standalone register bank"
+        "--regs",
+        action="store_true",
+        default=True,
+        help="Include standalone register bank",
     )
     gen_parser.add_argument("--no-regs", dest="regs", action="store_false")
     gen_parser.add_argument(
-        "--update-yaml", action="store_true", default=True, help="Update IP core YAML with fileSets"
+        "--update-yaml",
+        action="store_true",
+        default=True,
+        help="Update IP core YAML with fileSets",
     )
-    gen_parser.add_argument("--no-update-yaml", dest="update_yaml", action="store_false")
+    gen_parser.add_argument(
+        "--no-update-yaml", dest="update_yaml", action="store_false"
+    )
     gen_parser.add_argument(
         "--json", action="store_true", help="JSON output (for VS Code integration)"
     )
-    gen_parser.add_argument("--progress", action="store_true", help="Enable progress output")
+    gen_parser.add_argument(
+        "--progress", action="store_true", help="Enable progress output"
+    )
     gen_parser.set_defaults(func=cmd_generate)
 
     # parse subcommand
-    parse_parser = subparsers.add_parser("parse", help="Parse VHDL file and generate IP core YAML")
+    parse_parser = subparsers.add_parser(
+        "parse", help="Parse VHDL file and generate IP core YAML"
+    )
     parse_parser.add_argument("input", help="VHDL source file")
     parse_parser.add_argument(
         "--output", "-o", help="Output .ip.yml path (default: {entity}.ip.yml)"
     )
-    parse_parser.add_argument("--vendor", default="user", help="VLNV vendor name (default: user)")
-    parse_parser.add_argument("--library", default="ip", help="VLNV library name (default: ip)")
-    parse_parser.add_argument("--version", default="1.0", help="VLNV version (default: 1.0)")
     parse_parser.add_argument(
-        "--no-detect-bus", action="store_true", help="Disable automatic bus interface detection"
+        "--vendor", default="user", help="VLNV vendor name (default: user)"
+    )
+    parse_parser.add_argument(
+        "--library", default="ip", help="VLNV library name (default: ip)"
+    )
+    parse_parser.add_argument(
+        "--version", default="1.0", help="VLNV version (default: 1.0)"
+    )
+    parse_parser.add_argument(
+        "--no-detect-bus",
+        action="store_true",
+        help="Disable automatic bus interface detection",
     )
     parse_parser.add_argument("--memmap", help="Path to memory map file to reference")
     parse_parser.add_argument(
@@ -308,7 +342,9 @@ def main():
 
     # list-buses subcommand
     buses_parser = subparsers.add_parser("list-buses", help="List available bus types")
-    buses_parser.add_argument("bus_type", nargs="?", help="Bus type to show details for")
+    buses_parser.add_argument(
+        "bus_type", nargs="?", help="Bus type to show details for"
+    )
     buses_parser.add_argument("--ports", action="store_true", help="Show port details")
     buses_parser.add_argument("--json", action="store_true", help="JSON output")
     buses_parser.set_defaults(func=cmd_list_buses)

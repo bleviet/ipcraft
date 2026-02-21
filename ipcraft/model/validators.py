@@ -8,7 +8,6 @@ including cross-field and semantic validation.
 from dataclasses import dataclass
 from typing import List, Set
 
-from .bus import BusInterface
 from .core import IpCore
 from .memory_map import AddressBlock, MemoryMap, RegisterDef
 
@@ -207,14 +206,18 @@ class IpCoreValidator:
         if self.errors:
             lines.append(f"\n{len(self.errors)} Error(s):")
             for err in self.errors:
-                lines.append(f"  [{err.severity.upper()}] {err.location}: {err.message}")
+                lines.append(
+                    f"  [{err.severity.upper()}] {err.location}: {err.message}"
+                )
                 if err.suggestion:
                     lines.append(f"           → {err.suggestion}")
 
         if self.warnings:
             lines.append(f"\n{len(self.warnings)} Warning(s):")
             for warn in self.warnings:
-                lines.append(f"  [{warn.severity.upper()}] {warn.location}: {warn.message}")
+                lines.append(
+                    f"  [{warn.severity.upper()}] {warn.location}: {warn.message}"
+                )
                 if warn.suggestion:
                     lines.append(f"           → {warn.suggestion}")
 
@@ -224,7 +227,9 @@ class IpCoreValidator:
         return "\n".join(lines)
 
 
-def validate_ip_core(ip_core: IpCore) -> tuple[bool, List[ValidationError], List[ValidationError]]:
+def validate_ip_core(
+    ip_core: IpCore,
+) -> tuple[bool, List[ValidationError], List[ValidationError]]:
     """
     Convenience function to validate an IP core.
 
