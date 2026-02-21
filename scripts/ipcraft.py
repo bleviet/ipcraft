@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-ipcore - IP Core scaffolding and generation tool.
+ipcraft - IP Core scaffolding and generation tool.
 
 Usage:
-    python scripts/ipcore.py generate my_core.ip.yml --output ./generated
-    python scripts/ipcore.py generate my_core.ip.yml --json --progress  # VS Code mode
-    python scripts/ipcore.py parse my_core.vhd --output my_core.ip.yml
+    python scripts/ipcraft.py generate my_core.ip.yml --output ./generated
+    python scripts/ipcraft.py generate my_core.ip.yml --json --progress  # VS Code mode
+    python scripts/ipcraft.py parse my_core.vhd --output my_core.ip.yml
 
 Subcommands:
     generate    Generate VHDL/testbench from IP core YAML
@@ -266,7 +266,7 @@ def cmd_list_buses(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="ipcore", description="IP Core scaffolding and generation tool"
+        prog="ipcraft", description="IP Core scaffolding and generation tool"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
