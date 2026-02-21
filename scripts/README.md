@@ -17,32 +17,32 @@ uv sync
 Parse a VHDL file and generate an IP core YAML file with automatic bus interface detection.
 
 ```bash
-uv run python scripts/ipcraft.py parse <vhdl_file> [options]
+uv run ipcraft parse <vhdl_file> [options]
 ```
 
 **Examples:**
 
 ```bash
 # Basic usage - output to {entity}.ip.yml
-uv run python scripts/ipcraft.py parse my_core.vhd
+uv run ipcraft parse my_core.vhd
 
 # Specify output file
-uv run python scripts/ipcraft.py parse my_core.vhd -o my_core.ip.yml
+uv run ipcraft parse my_core.vhd -o my_core.ip.yml
 
 # Custom VLNV metadata
-uv run python scripts/ipcraft.py parse my_core.vhd --vendor mycompany --library lib --version 2.0
+uv run ipcraft parse my_core.vhd --vendor mycompany --library lib --version 2.0
 
 # Reference a memory map file
-uv run python scripts/ipcraft.py parse my_core.vhd --memmap my_core.mm.yml
+uv run ipcraft parse my_core.vhd --memmap my_core.mm.yml
 
 # Disable bus detection (raw port extraction only)
-uv run python scripts/ipcraft.py parse my_core.vhd --no-detect-bus
+uv run ipcraft parse my_core.vhd --no-detect-bus
 
 # Force overwrite existing file
-uv run python scripts/ipcraft.py parse my_core.vhd -f
+uv run ipcraft parse my_core.vhd -f
 
 # JSON output for VS Code integration
-uv run python scripts/ipcraft.py parse my_core.vhd --json
+uv run ipcraft parse my_core.vhd --json
 ```
 
 **Options:**
@@ -72,35 +72,35 @@ uv run python scripts/ipcraft.py parse my_core.vhd --json
 Generate VHDL files from an IP core YAML definition.
 
 ```bash
-uv run python scripts/ipcraft.py generate <ip_yaml_file> [options]
+uv run ipcraft generate <ip_yaml_file> [options]
 ```
 
 **Examples:**
 
 ```bash
 # Basic usage - output to same directory as input
-uv run python scripts/ipcraft.py generate my_core.ip.yml
+uv run ipcraft generate my_core.ip.yml
 
 # Specify output directory
-uv run python scripts/ipcraft.py generate my_core.ip.yml --output ./build
+uv run ipcraft generate my_core.ip.yml --output ./build
 
 # Generate only Intel integration files
-uv run python scripts/ipcraft.py generate my_core.ip.yml --vendor intel
+uv run ipcraft generate my_core.ip.yml --vendor intel
 
 # Generate only Xilinx integration files
-uv run python scripts/ipcraft.py generate my_core.ip.yml --vendor xilinx
+uv run ipcraft generate my_core.ip.yml --vendor xilinx
 
 # Skip testbench generation
-uv run python scripts/ipcraft.py generate my_core.ip.yml --no-testbench
+uv run ipcraft generate my_core.ip.yml --no-testbench
 
 # Skip register bank generation
-uv run python scripts/ipcraft.py generate my_core.ip.yml --no-regs
+uv run ipcraft generate my_core.ip.yml --no-regs
 
 # Don't update the input YAML with fileSets
-uv run python scripts/ipcraft.py generate my_core.ip.yml --no-update-yaml
+uv run ipcraft generate my_core.ip.yml --no-update-yaml
 
 # VS Code integration mode
-uv run python scripts/ipcraft.py generate my_core.ip.yml --json --progress
+uv run ipcraft generate my_core.ip.yml --json --progress
 ```
 
 **Options:**
@@ -145,23 +145,23 @@ output/
 List available bus types from the bus library with their port definitions.
 
 ```bash
-uv run python scripts/ipcraft.py list-buses [bus_type] [options]
+uv run ipcraft list-buses [bus_type] [options]
 ```
 
 **Examples:**
 
 ```bash
 # List all available bus types
-uv run python scripts/ipcraft.py list-buses
+uv run ipcraft list-buses
 
 # Show details for specific bus type
-uv run python scripts/ipcraft.py list-buses AXI4L
+uv run ipcraft list-buses AXI4L
 
 # Show port list for a bus type
-uv run python scripts/ipcraft.py list-buses AXI4L --ports
+uv run ipcraft list-buses AXI4L --ports
 
 # JSON output for VS Code integration
-uv run python scripts/ipcraft.py list-buses --json
+uv run ipcraft list-buses --json
 ```
 
 **Options:**
@@ -201,23 +201,23 @@ Use 'list-buses <TYPE>' for details, add --ports for port list
 
 ```bash
 # Parse VHDL to create initial IP YAML
-uv run python scripts/ipcraft.py parse my_design.vhd -o my_design.ip.yml
+uv run ipcraft parse my_design.vhd -o my_design.ip.yml
 
 # Edit my_design.ip.yml to add memory maps, adjust ports, etc.
 
 # Generate all outputs
-uv run python scripts/ipcraft.py generate my_design.ip.yml --output ./build
+uv run ipcraft generate my_design.ip.yml --output ./build
 ```
 
 ### 2. Round-trip workflow
 
 ```bash
 # Start with VHDL
-uv run python scripts/ipcraft.py parse original.vhd -o design.ip.yml
+uv run ipcraft parse original.vhd -o design.ip.yml
 
 # Customize the YAML (add memory maps, bus interfaces, etc.)
 # Then regenerate VHDL
-uv run python scripts/ipcraft.py generate design.ip.yml --output ./build
+uv run ipcraft generate design.ip.yml --output ./build
 
 # Run cocotb simulation
 cd build/tb && make
@@ -227,13 +227,13 @@ cd build/tb && make
 
 ```bash
 # JSON mode for programmatic use
-uv run python scripts/ipcraft.py parse my_core.vhd --json
+uv run ipcraft parse my_core.vhd --json
 # Output: {"success": true, "output": "/path/to/my_core.ip.yml"}
 
-uv run python scripts/ipcraft.py generate my_core.ip.yml --json --progress
+uv run ipcraft generate my_core.ip.yml --json --progress
 # Output: {"success": true, "files": {...}, "count": 10, "busType": "axil"}
 
-uv run python scripts/ipcraft.py list-buses --json
+uv run ipcraft list-buses --json
 # Output: {"success": true, "buses": [...]}
 ```
 
