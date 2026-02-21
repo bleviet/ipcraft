@@ -1,6 +1,10 @@
 """Testbench and simulation file generation mixin for ``IpCoreProjectGenerator``."""
 
-from typing import Dict
+from __future__ import annotations
+from typing import TYPE_CHECKING, Dict
+
+if TYPE_CHECKING:
+    from ._protocols import GeneratorHost
 
 from ipcraft.model.core import IpCore
 
@@ -14,19 +18,19 @@ class TestbenchGenerationMixin:
     - Memory map YAML for Python drivers
     """
 
-    def generate_cocotb_test(self, ip_core: IpCore, bus_type: str = "axil") -> str:
+    def generate_cocotb_test(self: GeneratorHost, ip_core: IpCore, bus_type: str = "axil") -> str:
         """Generate cocotb Python test file."""
         template = self.env.get_template("cocotb_test.py.j2")
         context = self._get_template_context(ip_core, bus_type)
         return template.render(**context)
 
-    def generate_cocotb_makefile(self, ip_core: IpCore, bus_type: str = "axil") -> str:
+    def generate_cocotb_makefile(self: GeneratorHost, ip_core: IpCore, bus_type: str = "axil") -> str:
         """Generate Makefile for cocotb simulation."""
         template = self.env.get_template("cocotb_makefile.j2")
         context = self._get_template_context(ip_core, bus_type)
         return template.render(**context)
 
-    def generate_memmap_yaml(self, ip_core: IpCore) -> str:
+    def generate_memmap_yaml(self: GeneratorHost, ip_core: IpCore) -> str:
         """Generate memory map YAML for Python driver."""
         template = self.env.get_template("memmap.yml.j2")
         context = self._get_template_context(ip_core)

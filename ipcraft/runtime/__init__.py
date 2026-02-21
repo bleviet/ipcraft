@@ -10,6 +10,7 @@ from .register import (
     AsyncBusInterface,
     AsyncRegister,
     BitField,
+    BusIOError,
     Register,
     RegisterArrayAccessor,
     RuntimeAccessType,
@@ -18,6 +19,7 @@ from .register import (
 __all__ = [
     "RuntimeAccessType",
     "BitField",
+    "BusIOError",
     "Register",
     "AsyncRegister",
     "AbstractBusInterface",

@@ -1,6 +1,10 @@
 """Vendor integration file generation mixin for ``IpCoreProjectGenerator``."""
 
-from typing import Dict
+from __future__ import annotations
+from typing import TYPE_CHECKING, Dict
+
+if TYPE_CHECKING:
+    from ._protocols import GeneratorHost
 
 from ipcraft.model.core import IpCore
 
@@ -8,7 +12,7 @@ from ipcraft.model.core import IpCore
 class VendorGenerationMixin:
     """Mixin for Intel/Xilinx integration file generation."""
 
-    def generate_intel_hw_tcl(self, ip_core: IpCore, bus_type: str = "axil") -> str:
+    def generate_intel_hw_tcl(self: GeneratorHost, ip_core: IpCore, bus_type: str = "axil") -> str:
         """Generate Intel Platform Designer ``_hw.tcl`` component file."""
         template = self.env.get_template("intel_hw_tcl.j2")
         context = self._get_template_context(ip_core, bus_type)
@@ -22,7 +26,7 @@ class VendorGenerationMixin:
         context["display_name"] = ip_core.vlnv.name.replace("_", " ").title()
         return template.render(**context)
 
-    def generate_xilinx_component_xml(self, ip_core: IpCore) -> str:
+    def generate_xilinx_component_xml(self: GeneratorHost, ip_core: IpCore) -> str:
         """Generate Xilinx Vivado IP-XACT ``component.xml``."""
         template = self.env.get_template("xilinx_component_xml.j2")
         context = self._get_template_context(ip_core, "axil")
@@ -35,7 +39,7 @@ class VendorGenerationMixin:
         context["display_name"] = ip_core.vlnv.name.replace("_", " ").title()
         return template.render(**context)
 
-    def generate_xilinx_xgui(self, ip_core: IpCore) -> str:
+    def generate_xilinx_xgui(self: GeneratorHost, ip_core: IpCore) -> str:
         """Generate Xilinx Vivado XGUI TCL file."""
         template = self.env.get_template("xilinx_xgui.j2")
         context = self._get_template_context(ip_core, "axil")

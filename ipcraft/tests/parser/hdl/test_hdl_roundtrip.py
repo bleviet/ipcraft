@@ -219,11 +219,8 @@ end architecture behavioral;
                             port_name = port.name.lower()
 
                             # Check direction
-                            direction_str = (
-                                port.direction.value.lower()
-                                if hasattr(port.direction, "value")
-                                else str(port.direction).lower()
-                            )
+                            from ipcraft.utils import enum_value
+                            direction_str = enum_value(port.direction).lower()
                             assert (
                                 f"{port_name} : {direction_str}"
                                 in generated_vhdl.lower()

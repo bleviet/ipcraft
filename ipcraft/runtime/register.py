@@ -16,6 +16,14 @@ from typing import Any, Dict, List, Optional, Union
 logger = logging.getLogger(__name__)
 
 
+class BusIOError(IOError):
+    """Raised when a bus read/write operation fails.
+
+    Bus interface implementations should raise this when
+    a hardware read or write operation fails (timeout, NACK, etc.).
+    """
+
+
 class RuntimeAccessType(str, Enum):
     """
     Register field access types.
@@ -92,12 +100,20 @@ class AbstractBusInterface(ABC):
 
     @abstractmethod
     def read_word(self, address: int) -> int:
-        """Read a 32-bit word from the specified address."""
+        """Read a 32-bit word from the specified address.
+
+        Raises:
+            BusIOError: If the bus operation fails.
+        """
         pass
 
     @abstractmethod
     def write_word(self, address: int, data: int) -> None:
-        """Write a 32-bit word to the specified address."""
+        """Write a 32-bit word to the specified address.
+
+        Raises:
+            BusIOError: If the bus operation fails.
+        """
         pass
 
 
@@ -108,12 +124,20 @@ class AsyncBusInterface(ABC):
 
     @abstractmethod
     async def read_word(self, address: int) -> int:
-        """Read a 32-bit word from the specified address."""
+        """Read a 32-bit word from the specified address.
+
+        Raises:
+            BusIOError: If the bus operation fails.
+        """
         pass
 
     @abstractmethod
     async def write_word(self, address: int, data: int) -> None:
-        """Write a 32-bit word to the specified address."""
+        """Write a 32-bit word to the specified address.
+
+        Raises:
+            BusIOError: If the bus operation fails.
+        """
         pass
 
 
@@ -313,11 +337,12 @@ class Register(_RegisterBase):
         current_reg_val = 0
         try:
             current_reg_val = self.read()
-        except Exception:
+        except BusIOError as exc:
             logger.warning(
-                "Failed to read register '%s' during RMW; "
+                "Failed to read register '%s' during RMW: %s; "
                 "proceeding with current_value=0 — other fields may be corrupted",
                 self.name,
+                exc,
             )
 
         reg_val_to_write = _build_rmw_value(
@@ -339,11 +364,12 @@ class Register(_RegisterBase):
         current_reg_val = 0
         try:
             current_reg_val = self.read()
-        except Exception:
+        except BusIOError as exc:
             logger.warning(
-                "Failed to read register '%s' during RMW; "
+                "Failed to read register '%s' during RMW: %s; "
                 "proceeding with current_value=0 — other fields may be corrupted",
                 self.name,
+                exc,
             )
 
         reg_val_to_write = _build_rmw_value(self._fields, field_values, current_reg_val)
@@ -393,11 +419,12 @@ class AsyncRegister(_RegisterBase):
         current_reg_val = 0
         try:
             current_reg_val = await self.read()
-        except Exception:
+        except BusIOError as exc:
             logger.warning(
-                "Failed to read register '%s' during async RMW; "
+                "Failed to read register '%s' during async RMW: %s; "
                 "proceeding with current_value=0 — other fields may be corrupted",
                 self.name,
+                exc,
             )
 
         reg_val_to_write = _build_rmw_value(
