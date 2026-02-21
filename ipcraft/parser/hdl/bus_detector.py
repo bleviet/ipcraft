@@ -7,19 +7,13 @@ Avalon-MM, etc.) by matching port naming patterns against bus definitions.
 
 import re
 from collections import defaultdict
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
-import yaml
 
 from ipcraft.model.base import Polarity
 from ipcraft.model.bus import BusInterface, BusInterfaceMode
+from ipcraft.model.bus_library import BusLibrary, get_bus_library
 from ipcraft.model.clock_reset import Clock, Reset
 from ipcraft.model.port import Port, PortDirection
-from ipcraft.utils import BUS_DEFINITIONS_PATH
-
-# Default path to bus definitions
-DEFAULT_BUS_DEFS_PATH = BUS_DEFINITIONS_PATH
 
 
 class BusInterfaceDetector:
@@ -30,23 +24,12 @@ class BusInterfaceDetector:
     AXI-Lite, AXI-Stream, Avalon-MM, and other standard interfaces.
     """
 
-    def __init__(self, bus_defs_path: Optional[Path] = None):
+    def __init__(self, bus_library: Optional[BusLibrary] = None):
         """
         Initialize detector with bus definitions.
-
-        Args:
-            bus_defs_path: Path to bus_definitions.yml file.
-                            Defaults to ipcraft-spec/common/bus_definitions.yml
         """
-        self.bus_defs_path = bus_defs_path or DEFAULT_BUS_DEFS_PATH
-        self.bus_definitions = self._load_definitions()
-
-    def _load_definitions(self) -> Dict[str, Any]:
-        """Load bus definitions from YAML file."""
-        if not self.bus_defs_path.exists():
-            return {}
-        with open(self.bus_defs_path, "r") as f:
-            return yaml.safe_load(f) or {}
+        self._bus_library = bus_library or get_bus_library()
+        self.bus_definitions = self._bus_library.get_all_raw_dicts()
 
     def detect(self, ports: List[Port]) -> List[BusInterface]:
         """

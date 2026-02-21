@@ -4,34 +4,25 @@ VHDL Parser module using pyparsing to parse VHDL entities and architectures.
 
 import logging
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict
 
 from pyparsing import (
     CaselessKeyword,
     CharsNotIn,
     Combine,
-    Forward,
     Group,
-    Keyword,
-    LineEnd,
     Literal,
     ParseBaseException,
 )
 from pyparsing import Optional as Opt
 from pyparsing import (
     ParserElement,
-    QuotedString,
-    Regex,
     SkipTo,
-    StringEnd,
     Suppress,
-    White,
     Word,
     ZeroOrMore,
     alphanums,
     alphas,
-    cppStyleComment,
-    delimitedList,
     nestedExpr,
     oneOf,
     original_text_for,
@@ -161,9 +152,6 @@ class VHDLParser:
             + Opt(self.identifier)
             + Suppress(";")
         ).set_results_name("package_decl")
-
-        # Set parse actions to transform the parsed data
-        self.port_list.set_parse_action(self._process_port_list)
 
     def parse_file(self, file_path: str) -> Dict[str, Any]:
         """
@@ -385,10 +373,6 @@ class VHDLParser:
         except (ValueError, KeyError, AttributeError) as e:
             logger.exception("Error creating parameter from data: %s", e)
             return None
-
-    def _process_port_list(self, s, loc, tokens):
-        """Parse action to process port list and extract all ports."""
-        return tokens
 
     def _remove_comments(self, text):
         """Remove comments from VHDL text."""

@@ -2,8 +2,10 @@
 
 import re
 import sys
+import warnings
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Any
+from enum import Enum
 
 # Try to find ipcraft-spec via package resource or relative path
 BUS_DEFINITIONS_PATH = None
@@ -68,28 +70,69 @@ def parse_bit_range(bits_str: str) -> Tuple[int, int]:
     raise ValueError(f"Invalid bit range notation: '{bits_str}'")
 
 
-# Canonical bus type aliases. Keys must be uppercase.
+# Step 1: Canonical bus type keys (alias → canonical key)
 _BUS_TYPE_ALIASES: dict[str, str] = {
     "AXIL": "AXI4L",
     "AXI4-LITE": "AXI4L",
     "AXI4LITE": "AXI4L",
+    "AXILITE": "AXI4L",
     "AVMM": "AVALON_MM",
     "AVALON-MM": "AVALON_MM",
+    "AVALONMM": "AVALON_MM",
+    "AVALON_MM": "AVALON_MM",
+}
+
+# Step 2: Canonical key → generator code (what the template system uses)
+_CANONICAL_TO_GENERATOR: dict[str, str] = {
+    "AXI4L": "axil",
+    "AVALON_MM": "avmm",
 }
 
 
 def normalize_bus_type_key(raw: str) -> str:
-    """Normalize a bus type string to its canonical key.
-
-    Handles common aliases such as ``axil``, ``axi4-lite`` → ``AXI4L``
-    and ``avmm``, ``avalon-mm`` → ``AVALON_MM``.  Unknown names are
-    returned uppercased as-is.
-
-    Args:
-        raw: Bus type string (case-insensitive).
-
-    Returns:
-        Canonical uppercase bus type key.
-    """
+    """Normalize a bus type string to its canonical key (e.g. 'axil' → 'AXI4L')."""
     upper = raw.upper() if isinstance(raw, str) else str(raw).upper()
-    return _BUS_TYPE_ALIASES.get(upper, upper)
+    canonical = _BUS_TYPE_ALIASES.get(upper, upper)
+    if upper in _BUS_TYPE_ALIASES and upper != canonical:
+        warnings.warn(
+            f"Bus type alias '{raw}' is deprecated. Use '{canonical}' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    return canonical
+
+
+def bus_type_to_generator_code(raw: str) -> str:
+    """Convert any bus type string to the generator template code ('axil' or 'avmm').
+
+    Falls back to 'axil' for unknown types.
+
+    Examples:
+        >>> bus_type_to_generator_code("AXI4L")
+        'axil'
+        >>> bus_type_to_generator_code("AVALON-MM")
+        'avmm'
+        >>> bus_type_to_generator_code("axil")
+        'axil'
+    """
+    canonical = normalize_bus_type_key(raw)
+    return _CANONICAL_TO_GENERATOR.get(canonical, "axil")
+
+
+def enum_value(v: Any) -> str:
+    """Extract the string value from an Enum member or return str(v).
+
+    Replaces the defensive ``v.value if hasattr(v, 'value') else str(v)``
+    pattern used throughout the codebase.
+    """
+    return v.value if isinstance(v, Enum) else str(v)
+
+
+def filter_none(data: dict) -> dict:
+    """Remove keys with None values from a dictionary.
+
+    Required for Pydantic v2 compatibility: passing None explicitly
+    to fields with defaults causes validation errors. Filtering None
+    values lets Pydantic use its own defaults.
+    """
+    return {k: v for k, v in data.items() if v is not None}

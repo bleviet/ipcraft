@@ -6,7 +6,9 @@ Supports imports, bus library loading, and memory map references.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Callable, TypeVar
+
+T = TypeVar("T")
 
 import yaml
 from pydantic import ValidationError
@@ -27,6 +29,7 @@ from ipcraft.model import (
 from .errors import ParseError
 from .fileset_parser import FileSetParserMixin
 from .memory_map_parser import MemoryMapParserMixin
+from ipcraft.utils import filter_none
 
 
 class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
@@ -45,33 +48,6 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
         self._bus_library_cache: Dict[Path, Dict[str, Any]] = {}
         self._register_templates: Dict[str, List[Dict[str, Any]]] = {}
         self._current_file: Optional[Path] = None
-
-    @staticmethod
-    def _filter_none(data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Remove keys with None values from dictionary.
-
-        This is required for Pydantic v2 compatibility. When a model field has
-        a default value or default_factory, passing None explicitly causes
-        validation errors. By filtering None values, we let Pydantic use its
-        own defaults instead.
-
-        Args:
-            data: Dictionary that may contain None values
-
-        Returns:
-            Dictionary with all None-valued keys removed
-
-        Example:
-            >>> # Without filtering - FAILS if description has default value:
-            >>> Clock(name="CLK", description=None)
-            ValidationError: description field expects string, got None
-
-            >>> # With filtering - WORKS:
-            >>> Clock(**_filter_none({"name": "CLK", "description": None}))
-            Clock(name="CLK", description="")  # Uses default value
-        """
-        return {k: v for k, v in data.items() if v is not None}
 
     @staticmethod
     def _parse_access(access: Any) -> AccessType:
@@ -187,6 +163,32 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
 
         return IpCore(**kwargs)
 
+    def _parse_list(
+        self,
+        data: List[Dict[str, Any]],
+        kind: str,
+        builder: Callable[[Dict[str, Any]], T],
+        file_path: Path,
+    ) -> List[T]:
+        """Generic list parser with consistent error handling.
+
+        Args:
+            data: List of raw dicts from YAML.
+            kind: Human-readable item kind for error messages (e.g. 'clock', 'port').
+            builder: Callable that converts one raw dict into a model instance.
+            file_path: Source file path for error context.
+
+        Returns:
+            List of parsed model instances.
+        """
+        results = []
+        for idx, item_data in enumerate(data):
+            try:
+                results.append(builder(item_data))
+            except (KeyError, TypeError, ValueError, ValidationError) as e:
+                raise ParseError(f"Error parsing {kind}[{idx}]: {e}", file_path)
+        return results
+
     def _parse_vlnv(self, data: Dict[str, Any], file_path: Path) -> VLNV:
         """Parse VLNV structure."""
         required = ["vendor", "library", "name", "version"]
@@ -203,141 +205,81 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
 
     def _parse_clocks(self, data: List[Dict[str, Any]], file_path: Path) -> List[Clock]:
         """Parse clock definitions."""
-        clocks = []
-        for idx, clock_data in enumerate(data):
-            try:
-                clocks.append(
-                    Clock(
-                        **self._filter_none(
-                            {
-                                "name": clock_data.get("name"),
-                                "logical_name": clock_data.get("logicalName", "CLK"),
-                                "direction": clock_data.get("direction", "in"),
-                                "frequency": clock_data.get("frequency"),
-                                "description": clock_data.get("description"),
-                            }
-                        )
-                    )
-                )
-            except (KeyError, TypeError, ValueError, ValidationError) as e:
-                raise ParseError(f"Error parsing clock[{idx}]: {e}", file_path)
-        return clocks
+        def build_clock(d):
+            return Clock(**filter_none({
+                "name": d.get("name"),
+                "logical_name": d.get("logicalName", "CLK"),
+                "direction": d.get("direction", "in"),
+                "frequency": d.get("frequency"),
+                "description": d.get("description"),
+            }))
+        return self._parse_list(data, "clock", build_clock, file_path)
 
     def _parse_resets(self, data: List[Dict[str, Any]], file_path: Path) -> List[Reset]:
         """Parse reset definitions."""
-        resets = []
-        for idx, reset_data in enumerate(data):
-            try:
-                polarity_str = reset_data.get("polarity", "activeLow")
-                polarity = (
-                    Polarity.ACTIVE_LOW if polarity_str == "activeLow" else Polarity.ACTIVE_HIGH
-                )
-                # Default logical name based on polarity
-                default_logical = (
-                    "RESET_N"
-                    if polarity_str == "activeLow" or polarity_str == "active_low"
-                    else "RESET"
-                )
-
-                resets.append(
-                    Reset(
-                        **self._filter_none(
-                            {
-                                "name": reset_data.get("name"),
-                                "logical_name": reset_data.get("logicalName", default_logical),
-                                "direction": reset_data.get("direction", "in"),
-                                "polarity": polarity,
-                                "description": reset_data.get("description"),
-                            }
-                        )
-                    )
-                )
-            except (KeyError, TypeError, ValueError, ValidationError) as e:
-                raise ParseError(f"Error parsing reset[{idx}]: {e}", file_path)
-        return resets
+        def build_reset(d):
+            polarity_str = d.get("polarity", "activeLow")
+            polarity = Polarity.ACTIVE_LOW if polarity_str == "activeLow" else Polarity.ACTIVE_HIGH
+            default_logical = "RESET_N" if polarity_str in ["activeLow", "active_low"] else "RESET"
+            return Reset(**filter_none({
+                "name": d.get("name"),
+                "logical_name": d.get("logicalName", default_logical),
+                "direction": d.get("direction", "in"),
+                "polarity": polarity,
+                "description": d.get("description"),
+            }))
+        return self._parse_list(data, "reset", build_reset, file_path)
 
     def _parse_ports(self, data: List[Dict[str, Any]], file_path: Path) -> List[Port]:
         """Parse port definitions."""
-        ports = []
-        for idx, port_data in enumerate(data):
-            try:
-                ports.append(
-                    Port(
-                        **self._filter_none(
-                            {
-                                "name": port_data.get("name"),
-                                "logical_name": port_data.get("logicalName", ""),
-                                "direction": port_data.get("direction"),
-                                "width": port_data.get("width", 1),
-                                "description": port_data.get("description"),
-                            }
-                        )
-                    )
-                )
-            except (KeyError, TypeError, ValueError, ValidationError) as e:
-                raise ParseError(f"Error parsing port[{idx}]: {e}", file_path)
-        return ports
+        def build_port(d):
+            return Port(**filter_none({
+                "name": d.get("name"),
+                "logical_name": d.get("logicalName", ""),
+                "direction": d.get("direction"),
+                "width": d.get("width", 1),
+                "description": d.get("description"),
+            }))
+        return self._parse_list(data, "port", build_port, file_path)
 
     def _parse_bus_interfaces(
         self, data: List[Dict[str, Any]], file_path: Path
     ) -> List[BusInterface]:
         """Parse bus interface definitions."""
-        interfaces = []
-        for idx, bus_data in enumerate(data):
-            try:
-                # Parse array configuration if present
-                array_config = None
-                if "array" in bus_data:
-                    array_data = bus_data["array"]
-                    array_config = ArrayConfig(
-                        count=array_data.get("count"),
-                        index_start=array_data.get("indexStart", 0),
-                        naming_pattern=array_data.get("namingPattern"),
-                        physical_prefix_pattern=array_data.get("physicalPrefixPattern"),
-                    )
-
-                interfaces.append(
-                    BusInterface(
-                        **self._filter_none(
-                            {
-                                "name": bus_data.get("name"),
-                                "type": bus_data.get("type"),
-                                "mode": bus_data.get("mode"),
-                                "physical_prefix": bus_data.get("physicalPrefix"),
-                                "associated_clock": bus_data.get("associatedClock"),
-                                "associated_reset": bus_data.get("associatedReset"),
-                                "memory_map_ref": bus_data.get("memoryMapRef"),
-                                "use_optional_ports": bus_data.get("useOptionalPorts"),
-                                "port_width_overrides": bus_data.get("portWidthOverrides"),
-                                "array": array_config,
-                            }
-                        )
-                    )
+        def build_bus(d):
+            array_config = None
+            if "array" in d:
+                array_data = d["array"]
+                array_config = ArrayConfig(
+                    count=array_data.get("count"),
+                    index_start=array_data.get("indexStart", 0),
+                    naming_pattern=array_data.get("namingPattern"),
+                    physical_prefix_pattern=array_data.get("physicalPrefixPattern"),
                 )
-            except (KeyError, TypeError, ValueError, ValidationError) as e:
-                raise ParseError(f"Error parsing busInterface[{idx}]: {e}", file_path)
-        return interfaces
+            return BusInterface(**filter_none({
+                "name": d.get("name"),
+                "type": d.get("type"),
+                "mode": d.get("mode"),
+                "physical_prefix": d.get("physicalPrefix"),
+                "associated_clock": d.get("associatedClock"),
+                "associated_reset": d.get("associatedReset"),
+                "memory_map_ref": d.get("memoryMapRef"),
+                "use_optional_ports": d.get("useOptionalPorts"),
+                "port_width_overrides": d.get("portWidthOverrides"),
+                "array": array_config,
+            }))
+        return self._parse_list(data, "busInterface", build_bus, file_path)
 
     def _parse_parameters(self, data: List[Dict[str, Any]], file_path: Path) -> List[Parameter]:
         """Parse parameter definitions."""
-        parameters = []
-        for idx, param_data in enumerate(data):
-            try:
-                parameters.append(
-                    Parameter(
-                        **self._filter_none(
-                            {
-                                "name": param_data.get("name"),
-                                "value": param_data.get("value"),
-                                "data_type": param_data.get("dataType", "integer"),
-                                "description": param_data.get("description"),
-                            }
-                        )
-                    )
-                )
-            except (KeyError, TypeError, ValueError, ValidationError) as e:
-                raise ParseError(f"Error parsing parameter[{idx}]: {e}", file_path)
-        return parameters
+        def build_param(d):
+            return Parameter(**filter_none({
+                "name": d.get("name"),
+                "value": d.get("value"),
+                "data_type": d.get("dataType", "integer"),
+                "description": d.get("description"),
+            }))
+        return self._parse_list(data, "parameter", build_param, file_path)
 
     def _load_bus_library(self, file_path: Path) -> Dict[str, Any]:
         """Load and cache bus library definitions."""

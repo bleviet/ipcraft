@@ -27,6 +27,16 @@ SUGGESTED_PREFIXES = {
 }
 
 
+class BusLibraryError(Exception):
+    """Base exception for bus library errors."""
+    pass
+
+
+class BusLibraryNotFoundError(BusLibraryError, FileNotFoundError):
+    """Raised when the bus definitions file cannot be found."""
+    pass
+
+
 @dataclass
 class PortDefinition:
     """Definition of a bus port."""
@@ -93,10 +103,15 @@ class BusLibrary:
         path = path or DEFAULT_BUS_DEFS_PATH
 
         if not path.exists():
-            raise FileNotFoundError(f"Bus definitions file not found: {path}")
+            raise BusLibraryNotFoundError(f"Bus definitions file not found: {path}")
 
-        with open(path, "r") as f:
-            raw_data = yaml.safe_load(f) or {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw_data = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            raise BusLibraryError(f"YAML syntax error in bus definitions file: {e}") from e
+        except OSError as e:
+            raise BusLibraryError(f"Failed to read bus definitions file: {e}") from e
 
         definitions = {}
         for key, data in raw_data.items():
@@ -236,6 +251,37 @@ class BusLibrary:
         """Get optional ports for a bus type."""
         defn = self.get_bus_definition(bus_type)
         return defn.optional_ports if defn else []
+
+    def get_raw_bus_dict(self, bus_type: str) -> Dict[str, Any]:
+        """Get raw bus definition dict (ports list, busType info) for a given type.
+
+        Returns {} if bus_type not found. Useful for generator/detector
+        code that needs the original port-list structure.
+        """
+        defn = self._definitions.get(bus_type)
+        if not defn:
+            return {}
+        return {
+            "busType": {
+                "vendor": defn.bus_type.vendor,
+                "library": defn.bus_type.library,
+                "name": defn.bus_type.name,
+                "version": defn.bus_type.version,
+            },
+            "ports": [
+                {
+                    "name": p.name,
+                    "direction": p.direction,
+                    "width": p.width,
+                    "presence": p.presence,
+                }
+                for p in defn.ports
+            ],
+        }
+
+    def get_all_raw_dicts(self) -> Dict[str, Dict[str, Any]]:
+        """Get all bus definitions as raw dicts (replaces yaml.safe_load consumers)."""
+        return {key: self.get_raw_bus_dict(key) for key in self._definitions}
 
 
 # Singleton instance for convenience

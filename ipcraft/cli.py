@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-ipcore - IP Core scaffolding and generation tool.
+ipcraft - IP Core scaffolding and generation tool.
 
 Usage:
-    python scripts/ipcore.py generate my_core.ip.yml --output ./generated
-    python scripts/ipcore.py generate my_core.ip.yml --json --progress  # VS Code mode
-    python scripts/ipcore.py parse my_core.vhd --output my_core.ip.yml
+    ipcraft generate my_core.ip.yml --output ./generated
+    ipcraft generate my_core.ip.yml --json --progress  # VS Code mode
+    ipcraft parse my_core.vhd --output my_core.ip.yml
 
 Subcommands:
     generate    Generate VHDL/testbench from IP core YAML
@@ -16,7 +16,6 @@ Subcommands:
 """
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -25,24 +24,13 @@ from ipcraft.generator.yaml.ip_yaml_generator import IpYamlGenerator
 from ipcraft.model.bus_library import BusLibrary, get_bus_library
 from ipcraft.parser.yaml.ip_yaml_parser import YamlIpCoreParser
 
-# Map YAML bus types to generator templates
-BUS_TYPE_MAP = {
-    "AXI4L": "axil",
-    "AXI4LITE": "axil",
-    "AXILITE": "axil",
-    "AVALONMM": "avmm",
-    "AVMM": "avmm",
-    "AVALON_MM": "avmm",
-    "AVALON-MM": "avmm",
-}
-
-
 def get_bus_type(ip_core) -> str:
     """Extract bus type from IP core's bus interfaces."""
     for bus in ip_core.bus_interfaces:
         if bus.mode == "slave" and bus.memory_map_ref:
-            bus_type = bus.type.value if hasattr(bus.type, "value") else str(bus.type)
-            return BUS_TYPE_MAP.get(bus_type.upper(), "axil")
+            from ipcraft.utils import bus_type_to_generator_code, enum_value
+            bus_type_str = enum_value(bus.type)
+            return bus_type_to_generator_code(bus_type_str)
     return "axil"
 
 
@@ -262,7 +250,7 @@ def cmd_list_buses(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="ipcore", description="IP Core scaffolding and generation tool"
+        prog="ipcraft", description="IP Core scaffolding and generation tool"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

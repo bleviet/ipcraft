@@ -9,20 +9,19 @@ Orchestrates the generation of all files needed for an IP core project:
 - Structured project layout (rtl/, tb/, intel/, xilinx/)
 """
 
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import yaml
 from jinja2 import Environment, FileSystemLoader
 
 from ipcraft.generator.base_generator import BaseGenerator
 from ipcraft.generator.hdl.fileset_manager import FileSetManagerMixin
 from ipcraft.generator.hdl.testbench_generator import TestbenchGenerationMixin
 from ipcraft.generator.hdl.vendor_generator import VendorGenerationMixin
+from ipcraft.model.bus_library import get_bus_library
 from ipcraft.model.core import IpCore
 from ipcraft.model.memory_map import BitFieldDef, MemoryMap, RegisterDef
-from ipcraft.utils import BUS_DEFINITIONS_PATH, normalize_bus_type_key, parse_bit_range
+from ipcraft.utils import enum_value, normalize_bus_type_key, parse_bit_range
 
 
 class IpCoreProjectGenerator(
@@ -39,26 +38,13 @@ class IpCoreProjectGenerator(
 
     SUPPORTED_BUS_TYPES = ["axil", "avmm"]
 
-    # Mapping from bus_definitions.yml type names to generator bus_type codes
-    BUS_TYPE_MAP = {
-        "AXI4L": "axil",
-        "AVALON_MM": "avmm",
-    }
-
-    def __init__(self, template_dir: Optional[str] = None):
+    def __init__(self, template_dir: Optional[str] = None, bus_library=None):
         """Initialize VHDL generator with templates."""
         if template_dir is None:
-            template_dir = os.path.join(os.path.dirname(__file__), "templates")
+            template_dir = str(Path(__file__).parent / "templates")
         super().__init__(template_dir)
-        self.bus_definitions = self._load_bus_definitions()
-
-    def _load_bus_definitions(self) -> Dict[str, Any]:
-        """Load bus definitions from ipcraft-spec/common/bus_definitions.yml."""
-        bus_defs_path = BUS_DEFINITIONS_PATH
-        if bus_defs_path.exists():
-            with open(bus_defs_path) as f:
-                return yaml.safe_load(f)
-        return {}
+        self._bus_library = bus_library or get_bus_library()
+        self.bus_definitions = self._bus_library.get_all_raw_dicts()
 
     def _get_vhdl_port_type(self, width: int, logical_name: str) -> str:
         """Get VHDL type string for a port based on width.
@@ -121,7 +107,9 @@ class IpCoreProjectGenerator(
                 if mode == "slave":
                     direction = "in" if direction == "out" else "out"
 
-                width = port.get("width", 1)
+                width = port.get("width")
+                if width is None:
+                    width = 1
 
                 # Apply width overrides
                 if port_width_overrides and logical_name in port_width_overrides:
@@ -156,79 +144,46 @@ class IpCoreProjectGenerator(
         registers = []
 
         def process_register(reg, base_offset, prefix):
-            current_offset = base_offset + (
-                getattr(reg, "address_offset", None) or getattr(reg, "offset", None) or 0
-            )
-            reg_name = reg.name if hasattr(reg, "name") else "REG"
-
-            # Check for nested registers (array/group)
-            nested_regs = getattr(reg, "registers", [])
-            if nested_regs:
-                count = getattr(reg, "count", 1) or 1
-                stride = getattr(reg, "stride", 0) or 0
-
-                for i in range(count):
-                    instance_offset = current_offset + (i * stride)
-                    instance_prefix = (
-                        f"{prefix}{reg_name}_{i}_" if count > 1 else f"{prefix}{reg_name}_"
-                    )
-
-                    for child in nested_regs:
-                        process_register(child, instance_offset, instance_prefix)
-                return
+            current_offset = base_offset + reg.address_offset
+            reg_name = reg.name
 
             # Leaf register processing
             fields = []
-            for field in getattr(reg, "fields", []):
-                # Handle bit parsing
-                bit_offset = getattr(field, "bit_offset", None)
-                bit_width = getattr(field, "bit_width", None)
+            if reg.fields:
+                for field in reg.fields:
+                    acc_str = enum_value(field.access)
+                    reg_acc_str = enum_value(reg.access)
 
-                if bit_offset is None or bit_width is None:
-                    bits_str = getattr(field, "bits", "")
-                    parsed = self._parse_bits(bits_str)
-                    if bit_offset is None:
-                        bit_offset = parsed["offset"]
-                    if bit_width is None:
-                        bit_width = parsed["width"]
+                    fields.append(
+                        {
+                            "name": field.name,
+                            "offset": field.bit_offset,
+                            "width": field.bit_width,
+                            "access": acc_str.lower() if acc_str else reg_acc_str.lower(),
+                            "reset_value": field.reset_value if field.reset_value is not None else 0,
+                            "description": field.description or "",
+                        }
+                    )
 
-                # Access normalization
-                acc = getattr(field, "access", "read-write")
-                acc_str = acc.value if hasattr(acc, "value") else str(acc)
-                reg_acc = getattr(reg, "access", "read-write")
-                reg_acc_str = reg_acc.value if hasattr(reg_acc, "value") else str(reg_acc)
-
-                fields.append(
-                    {
-                        "name": field.name,
-                        "offset": bit_offset,
-                        "width": bit_width,
-                        "access": acc_str.lower() if acc_str else reg_acc_str.lower(),
-                        "reset_value": (
-                            field.reset_value
-                            if getattr(field, "reset_value", None) is not None
-                            else 0
-                        ),
-                        "description": getattr(field, "description", ""),
-                    }
-                )
-
-            reg_acc = getattr(reg, "access", "read-write")
-            reg_acc_str = reg_acc.value if hasattr(reg_acc, "value") else str(reg_acc)
+            reg_acc_str = enum_value(reg.access)
 
             registers.append(
                 {
                     "name": prefix + reg_name,
                     "offset": current_offset,
                     "access": reg_acc_str.lower(),
-                    "description": getattr(reg, "description", ""),
+                    "description": reg.description or "",
                     "fields": fields,
                 }
             )
 
         for mm in ip_core.memory_maps:
+            if not mm.address_blocks:
+                continue
             for block in mm.address_blocks:
-                block_offset = getattr(block, "base_address", 0) or getattr(block, "offset", 0) or 0
+                if not block.registers:
+                    continue
+                block_offset = block.base_address
                 for reg in block.registers:
                     process_register(reg, block_offset, "")
 
@@ -241,11 +196,7 @@ class IpCoreProjectGenerator(
             generics.append(
                 {
                     "name": param.name,
-                    "type": (
-                        param.data_type.value
-                        if hasattr(param.data_type, "value")
-                        else str(param.data_type)
-                    ),
+                    "type": enum_value(param.data_type),
                     "default_value": param.value,
                 }
             )
@@ -258,10 +209,8 @@ class IpCoreProjectGenerator(
 
         ports = []
         for port in ip_core.ports:
-            direction = (
-                port.direction.value if hasattr(port.direction, "value") else str(port.direction)
-            )
-            width = port.width if hasattr(port, "width") else 1
+            direction = enum_value(port.direction)
+            width = port.width
 
             # Check if width is a parameter reference (string) or a number
             is_parameterized = isinstance(width, str)
@@ -305,31 +254,25 @@ class IpCoreProjectGenerator(
             return []
 
         for iface in ip_core.bus_interfaces:
-            array_def = getattr(iface, "array", None)
+            array_def = iface.array
 
             if array_def:
-                count = getattr(array_def, "count", 1)
-                start = getattr(array_def, "index_start", 0)
+                count = array_def.count
+                start = array_def.index_start
 
                 for i in range(count):
                     idx = start + i
-                    name_pattern = getattr(array_def, "naming_pattern", f"{iface.name}_{{index}}")
+                    name_pattern = array_def.naming_pattern or f"{iface.name}_{{index}}"
                     name = name_pattern.format(index=idx)
 
-                    prefix_pattern = getattr(
-                        array_def, "physical_prefix_pattern", f"{iface.physical_prefix}{{index}}_"
-                    )
+                    prefix_pattern = array_def.physical_prefix_pattern or f"{iface.physical_prefix}{{index}}_"
                     prefix = prefix_pattern.format(index=idx)
 
                     expanded.append(
                         {
                             "name": name,
                             "type": iface.type,
-                            "mode": (
-                                iface.mode.value
-                                if hasattr(iface.mode, "value")
-                                else str(iface.mode)
-                            ),
+                            "mode": enum_value(iface.mode),
                             "physical_prefix": prefix,
                             "use_optional_ports": iface.use_optional_ports or [],
                             "port_width_overrides": iface.port_width_overrides or {},
@@ -342,9 +285,7 @@ class IpCoreProjectGenerator(
                     {
                         "name": iface.name,
                         "type": iface.type,
-                        "mode": (
-                            iface.mode.value if hasattr(iface.mode, "value") else str(iface.mode)
-                        ),
+                        "mode": enum_value(iface.mode),
                         "physical_prefix": iface.physical_prefix or "s_axi_",
                         "use_optional_ports": iface.use_optional_ports or [],
                         "port_width_overrides": iface.port_width_overrides or {},

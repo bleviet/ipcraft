@@ -67,10 +67,7 @@ class IpCore(StrictModel):
     @staticmethod
     def _find_by_name(items: Sequence[NamedItem], name: str) -> Optional[NamedItem]:
         """Return the first item with a matching ``name`` attribute."""
-        for item in items:
-            if getattr(item, "name", None) == name:
-                return item
-        return None
+        return next((item for item in items if getattr(item, "name", None) == name), None)
 
     def get_clock(self, name: str) -> Optional[Clock]:
         """Get clock by logical name."""

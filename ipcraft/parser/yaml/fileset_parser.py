@@ -7,6 +7,7 @@ import yaml
 from pydantic import ValidationError
 
 from ipcraft.model import File, FileSet, FileType
+from ipcraft.utils import filter_none
 
 from .errors import ParseError
 
@@ -28,7 +29,7 @@ class FileSetParserMixin:
                 files = self._parse_files(fs_data.get("files", []), file_path)
                 file_sets.append(
                     FileSet(
-                        **self._filter_none(
+                        **filter_none(
                             {
                                 "name": fs_data.get("name"),
                                 "description": fs_data.get("description"),
@@ -70,7 +71,7 @@ class FileSetParserMixin:
 
                 files.append(
                     File(
-                        **self._filter_none(
+                        **filter_none(
                             {
                                 "path": file_data.get("path"),
                                 "type": file_type,

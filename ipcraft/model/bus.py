@@ -50,14 +50,6 @@ class ArrayConfig(StrictModel):
         ..., description="Physical prefix pattern with {index} placeholder"
     )
 
-    @field_validator("count")
-    @classmethod
-    def validate_count(cls, v: int) -> int:
-        """Ensure count is positive."""
-        if v < 1:
-            raise ValueError("Array count must be at least 1")
-        return v
-
     def get_instance_name(self, index: int) -> str:
         """Get logical name for specific instance."""
         return self.naming_pattern.format(index=index)

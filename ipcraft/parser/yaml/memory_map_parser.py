@@ -8,12 +8,13 @@ from pydantic import ValidationError
 
 from ipcraft.model import AddressBlock, MemoryMap
 from ipcraft.model.memory_map import BitFieldDef, RegisterDef
-from ipcraft.utils import parse_bit_range
+from ipcraft.utils import parse_bit_range, filter_none
 
 from .errors import ParseError
+from .protocols import ParserHostContext
 
 
-class MemoryMapParserMixin:
+class MemoryMapParserMixin(ParserHostContext):
     """Mixin implementing memory map parsing and expansion logic."""
 
     def _build_register_def(
@@ -46,7 +47,7 @@ class MemoryMapParserMixin:
             Validated RegisterDef instance.
         """
         return RegisterDef(
-            **self._filter_none(
+            **filter_none(
                 {
                     "name": name,
                     "address_offset": address_offset,
@@ -111,7 +112,7 @@ class MemoryMapParserMixin:
                 )
                 memory_maps.append(
                     MemoryMap(
-                        **self._filter_none(
+                        **filter_none(
                             {
                                 "name": map_data.get("name"),
                                 "description": map_data.get("description"),
@@ -143,7 +144,7 @@ class MemoryMapParserMixin:
 
                 blocks.append(
                     AddressBlock(
-                        **self._filter_none(
+                        **filter_none(
                             {
                                 "name": block_data.get("name"),
                                 "base_address": base_address,
@@ -320,7 +321,7 @@ class MemoryMapParserMixin:
 
                 fields.append(
                     BitFieldDef(
-                        **self._filter_none(
+                        **filter_none(
                             {
                                 "name": field_data.get("name"),
                                 "bit_offset": bit_offset,

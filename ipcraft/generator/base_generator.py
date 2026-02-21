@@ -13,7 +13,6 @@ Future planned implementations:
 - ChiselGenerator: For Chisel HDL generation
 """
 
-import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Optional, Union
@@ -42,7 +41,7 @@ class BaseGenerator(ABC):
         """
         if template_dir is None:
             # Default: templates directory relative to concrete class file
-            template_dir = os.path.join(os.path.dirname(__file__), "templates")
+            template_dir = str(Path(__file__).parent / "templates")
 
         self.template_dir = template_dir
         self.env = Environment(

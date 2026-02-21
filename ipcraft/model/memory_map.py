@@ -11,6 +11,7 @@ Naming convention:
 """
 
 from enum import Enum
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, Dict, ForwardRef, List, Optional, Union
 
 from pydantic import Field, computed_field, field_validator, model_validator
@@ -344,7 +345,8 @@ class AddressBlock(FlexibleModel):
     # Content
     registers: List[RegisterDef] = Field(default_factory=list, description="Registers in block")
 
-    @property
+    @computed_field
+    @cached_property
     def end_address(self) -> int:
         """Calculate end address of the block."""
         range_val = self.range

@@ -90,12 +90,15 @@ class VhdlLlmParser:
         """Initialize LLM provider (lazy loading)."""
         try:
             # Try to import llm_core providers
+            import os
             import sys
 
-            llm_core_path = Path(__file__).parents[4] / "llm-playground" / "llm_core"
-
-            if llm_core_path.exists():
-                sys.path.insert(0, str(llm_core_path))
+            # Allow fallback path via environment variable
+            llm_core_env = os.environ.get("LLM_CORE_PATH")
+            if llm_core_env:
+                llm_core_path = Path(llm_core_env)
+                if llm_core_path.exists() and str(llm_core_path) not in sys.path:
+                    sys.path.insert(0, str(llm_core_path))
 
             # Import directly from module files
             from llm_core.providers.gemini import GeminiProvider
