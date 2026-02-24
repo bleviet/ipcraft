@@ -1,0 +1,72 @@
+site_name: IPCraft Documentation
+site_description: Python library and CLI for FPGA IP Core development
+site_url: https://bleviet.github.io/ipcraft
+repo_url: https://github.com/bleviet/ipcraft
+repo_name: bleviet/ipcraft
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+    - content.tabs.link
+    - search.highlight
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+  - attr_list
+  - def_list
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+  - User Guide:
+      - CLI Reference: user-guide/cli.md
+      - IP YAML Specification: user-guide/ip-yaml-spec.md
+      - Memory Maps: user-guide/memory-maps.md
+      - Bus Library: user-guide/bus-library.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Data Model: architecture/data-model.md
+      - Driver System: architecture/driver.md
+  - API Reference:
+      - Model: api/model.md
+      - Parser: api/parser.md
+      - Generator: api/generator.md
+      - Runtime: api/runtime.md
+      - Driver: api/driver.md
+  - Contributing: contributing.md
