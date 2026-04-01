@@ -9,8 +9,9 @@ Orchestrates the generation of all files needed for an IP core project:
 - Structured project layout (rtl/, tb/, intel/, xilinx/)
 """
 
+import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 import warnings
 
 
@@ -37,11 +38,18 @@ class IpCoreProjectGenerator(
 
     SUPPORTED_BUS_TYPES = ["axil", "avmm"]
 
-    def __init__(self, template_dir: Optional[str] = None, bus_library=None):
+    def __init__(self, template_dir: Union[str, List[str], None] = None, bus_library=None):
         """Initialize VHDL generator with templates."""
-        if template_dir is None:
-            template_dir = str(Path(__file__).parent / "templates")
-        super().__init__(template_dir)
+        default_template_dir = str(Path(__file__).parent / "templates")
+        
+        search_paths = []
+        if isinstance(template_dir, str):
+            search_paths.append(template_dir)
+        elif isinstance(template_dir, list):
+            search_paths.extend(template_dir)
+        search_paths.append(default_template_dir)
+
+        super().__init__(search_paths)
         self._bus_library = bus_library or get_bus_library()
         self.bus_definitions = self._bus_library.get_all_raw_dicts()
 
@@ -426,6 +434,19 @@ class IpCoreProjectGenerator(
         context = self._get_template_context(ip_core)
         return template.render(**context)
 
+    def dump_context(self, ip_core: IpCore, bus_type: str = "axil") -> str:
+        """Dump the template context to a JSON string for discovery."""
+        context = self._get_template_context(ip_core, bus_type)
+        
+        def default_encoder(obj):
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            if hasattr(obj, "dict"):
+                return obj.dict()
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+            
+        return json.dumps(context, default=default_encoder, indent=2)
+
     def generate_all(
         self,
         ip_core: IpCore,
@@ -434,6 +455,7 @@ class IpCoreProjectGenerator(
         structured: bool = False,
         vendor: str = "none",
         include_testbench: bool = False,
+        dump_context: bool = False,
     ) -> Dict[str, str]:
         """
         Generate all VHDL files for the IP core.
@@ -445,13 +467,14 @@ class IpCoreProjectGenerator(
             structured: Use organized folder structure (rtl/, tb/, intel/, xilinx/)
             vendor: Vendor files to include ('none', 'intel', 'xilinx', 'both')
             include_testbench: Include cocotb testbench files
+            dump_context: Include template_context.json in generated files
 
         Returns:
             Dictionary mapping filename to content
         """
         if structured:
             return self.generate_all_with_structure(
-                ip_core, bus_type, include_regs, vendor, include_testbench
+                ip_core, bus_type, include_regs, vendor, include_testbench, dump_context
             )
 
         name = ip_core.vlnv.name.lower()
@@ -466,6 +489,9 @@ class IpCoreProjectGenerator(
         if include_regs:
             files[f"{name}_regs.vhd"] = self.generate_register_file(ip_core)
 
+        if dump_context:
+            files["template_context.json"] = self.dump_context(ip_core, bus_type)
+
         return files
 
     def generate_all_with_structure(
@@ -475,6 +501,7 @@ class IpCoreProjectGenerator(
         include_regs: bool = False,
         vendor: str = "none",
         include_testbench: bool = False,
+        dump_context: bool = False,
     ) -> Dict[str, str]:
         """
         Generate all files with organized folder structure (VSCode extension compatible).
@@ -485,6 +512,7 @@ class IpCoreProjectGenerator(
             include_regs: Include standalone register bank
             vendor: Vendor files to include ('none', 'intel', 'xilinx', 'both')
             include_testbench: Include cocotb testbench files
+            dump_context: Include template_context.json in generated files
 
         Returns:
             Dictionary mapping full path (with subdirs) to content
@@ -522,6 +550,9 @@ class IpCoreProjectGenerator(
             files[f"xilinx/xgui/{name}_v{version_str}.tcl"] = self.generate_xilinx_xgui(
                 ip_core
             )
+
+        if dump_context:
+            files["template_context.json"] = self.dump_context(ip_core, bus_type)
 
         return files
 

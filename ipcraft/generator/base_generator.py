@@ -15,8 +15,7 @@ Future planned implementations:
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Optional, Union
-
+from typing import Dict, List, Optional, Union
 from jinja2 import Environment, FileSystemLoader
 
 # Support both legacy IPCore and new IpCore models
@@ -31,21 +30,26 @@ class BaseGenerator(ABC):
     Templates are loaded from a 'templates' subdirectory.
     """
 
-    def __init__(self, template_dir: Optional[str] = None):
+    def __init__(self, template_dir: Union[str, List[str], None] = None):
         """
         Initialize the generator with Jinja2 environment.
 
         Args:
-            template_dir: Optional custom template directory.
-                                                    Defaults to 'templates' subdirectory of concrete generator.
+            template_dir: Optional custom template directory or list of directories.
+                          Defaults to 'templates' subdirectory of concrete generator.
+                          If a list is provided, templates are searched in order.
         """
         if template_dir is None:
             # Default: templates directory relative to concrete class file
-            template_dir = str(Path(__file__).parent / "templates")
+            template_dirs = [str(Path(__file__).parent / "templates")]
+        elif isinstance(template_dir, str):
+            template_dirs = [template_dir]
+        else:
+            template_dirs = template_dir
 
-        self.template_dir = template_dir
+        self.template_dirs = template_dirs
         self.env = Environment(
-            loader=FileSystemLoader(template_dir),
+            loader=FileSystemLoader(self.template_dirs),
             trim_blocks=True,
             lstrip_blocks=True,
         )

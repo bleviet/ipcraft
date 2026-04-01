@@ -57,7 +57,7 @@ def cmd_generate(args):
         log(f"Detected bus type: {bus_type}", args.progress, args.json)
 
         log("Generating VHDL files...", args.progress, args.json)
-        gen = IpCoreProjectGenerator()
+        gen = IpCoreProjectGenerator(template_dir=args.template_dir)
         all_files = gen.generate_all(
             ip_core,
             bus_type=bus_type,
@@ -65,6 +65,7 @@ def cmd_generate(args):
             vendor=args.vendor,
             include_testbench=args.testbench,
             include_regs=args.regs,
+            dump_context=args.dump_context,
         )
 
         log(f"Writing {len(all_files)} files...", args.progress, args.json)
@@ -306,6 +307,18 @@ def main():
     )
     gen_parser.add_argument(
         "--progress", action="store_true", help="Enable progress output"
+    )
+    gen_parser.add_argument(
+        "--template-dir",
+        "--methodology",
+        dest="template_dir",
+        action="append",
+        help="Path to custom template directory (can be used multiple times)",
+    )
+    gen_parser.add_argument(
+        "--dump-context",
+        action="store_true",
+        help="Dump template context to template_context.json",
     )
     gen_parser.set_defaults(func=cmd_generate)
 
