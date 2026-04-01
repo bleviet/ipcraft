@@ -26,6 +26,8 @@ ipcraft generate <ip_yaml_file> [options]
 | `--testbench` / `--no-testbench` | `--testbench` | Generate cocotb testbench |
 | `--regs` / `--no-regs` | `--regs` | Generate standalone register bank |
 | `--update-yaml` / `--no-update-yaml` | `--update-yaml` | Update IP YAML with fileSets |
+| `--template-dir`, `--methodology` | None | Path to custom Jinja2 template directory (can be used multiple times) |
+| `--dump-context` | Off | Dump template context to `template_context.json` for template development |
 | `--json` | Off | JSON output for tool integration |
 | `--progress` | Off | Enable progress reporting |
 
@@ -43,6 +45,12 @@ ipcraft generate my_core.ip.yml --vendor intel --no-testbench
 
 # VS Code integration mode
 ipcraft generate my_core.ip.yml --json --progress
+
+# Dump template context to explore available Jinja2 variables
+ipcraft generate my_core.ip.yml --dump-context
+
+# Use a custom template methodology
+ipcraft generate my_core.ip.yml --template-dir ./my-methodology
 ```
 
 ### Generated File Structure

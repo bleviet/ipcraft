@@ -12,7 +12,11 @@ The main generator for producing VHDL, vendor files, and testbenches from an
 ```python
 from ipcraft.generator.hdl import IpCoreProjectGenerator
 
+# Use built-in templates
 gen = IpCoreProjectGenerator()
+
+# Or use custom templates (layered over built-in ones)
+gen = IpCoreProjectGenerator(template_dir=["./my-methodology"])
 ```
 
 ### `generate_all(ip_core, bus_type, ...) -> Dict[str, str]`
@@ -28,6 +32,7 @@ files = gen.generate_all(
     structured=True,           # use rtl/tb/intel/xilinx folder layout
     vendor="both",             # "none", "intel", "xilinx", "both"
     include_testbench=True,    # generate cocotb testbench
+    dump_context=False,        # set to True to output template_context.json
 )
 
 # files: {"rtl/core_pkg.vhd": "...", "rtl/core.vhd": "...", ...}
@@ -103,9 +108,9 @@ tb_files = gen.generate_testbench(ip_core, bus_type)
 
 ## Template System
 
-Generators use Jinja2 templates stored in `ipcraft/generator/hdl/templates/`.
-The `BaseGenerator` abstract class sets up the Jinja2 environment relative
-to the concrete generator's module path.
+Generators use Jinja2 templates. By default, these are loaded from the `ipcraft/generator/hdl/templates/` directory.
+
+The `BaseGenerator` and `IpCoreProjectGenerator` support **Layered Template Loading**. By providing a list of template directories (e.g., via the `template_dir` argument), the generator will search the directories in order. This allows users to create a "custom methodology" by providing only the specific templates they want to override, falling back to the built-in templates for the rest.
 
 ### Template Context
 
@@ -116,6 +121,13 @@ The generator builds a context dictionary from the `IpCore` model containing:
 - Generic/parameter definitions
 - Bus interface details with direction-flipped ports for slave mode
 - VHDL type information (parameterized widths supported)
+
+**Context Discovery:** You can serialize the full context dictionary to a JSON file to see exactly what values are available in the templates:
+
+```python
+json_str = gen.dump_context(ip_core, bus_type="axil")
+```
+Or via the CLI: `ipcraft generate --dump-context`.
 
 ---
 
