@@ -25,6 +25,9 @@ from ipcraft.generator.yaml.ip_yaml_generator import IpYamlGenerator
 from ipcraft.model.bus_library import get_bus_library
 from ipcraft.parser.yaml.ip_yaml_parser import YamlIpCoreParser
 
+from ipcraft.generator.yaml.boilerplate import generate_new_ip
+from ipcraft.utils.diagram import generate_ascii_diagram
+
 
 def get_bus_type(ip_core) -> str:
     """Extract bus type from IP core's bus interfaces."""
@@ -43,6 +46,52 @@ def log(msg: str, use_progress: bool, use_json: bool):
         print(f"PROGRESS: {msg}", flush=True)
     elif use_progress:
         print(msg)
+
+
+def cmd_new(args):
+    """Generate a new IP core YAML from templates."""
+    import os
+    from ipcraft.parser.yaml.ip_yaml_parser import YamlIpCoreParser
+
+    try:
+        ip_path, mm_path = generate_new_ip(
+            name=args.name,
+            vendor=args.vendor,
+            library=args.library,
+            version=args.version,
+            bus_type=args.bus,
+            output_dir=args.output,
+        )
+
+        print(f"✓ Generated {ip_path}")
+        if mm_path:
+            print(f"✓ Generated {mm_path}")
+
+        # Parse the newly generated IP to render the diagram
+        # Need to change to the output directory temporarily if it's not current
+        # so that the parser can resolve the memory map import
+        original_cwd = os.getcwd()
+        try:
+            if args.output and args.output != ".":
+                os.chdir(args.output)
+
+            parser = YamlIpCoreParser()
+            # If we changed dir, we just need the filename
+            filename = (
+                ip_path.name if args.output and args.output != "." else str(ip_path)
+            )
+            ip_core = parser.parse_file(filename)
+
+            print("\nIP Core Symbol:")
+            print(generate_ascii_diagram(ip_core))
+            print()
+
+        finally:
+            os.chdir(original_cwd)
+
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
 
 def cmd_generate(args):
@@ -264,6 +313,18 @@ def main():
         prog="ipcraft", description="IP Core scaffolding and generation tool"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # new subcommand
+    new_parser = subparsers.add_parser("new", help="Create a new IP core from template")
+    new_parser.add_argument("name", help="Name of the IP core")
+    new_parser.add_argument("--vendor", default="example.com", help="Vendor name")
+    new_parser.add_argument("--library", default="examples", help="Library name")
+    new_parser.add_argument("--version", default="1.0.0", help="Version")
+    new_parser.add_argument(
+        "--bus", help="Include a default bus interface (e.g., AXI4L)"
+    )
+    new_parser.add_argument("--output", "-o", default=".", help="Output directory")
+    new_parser.set_defaults(func=cmd_new)
 
     # generate subcommand
     gen_parser = subparsers.add_parser(
