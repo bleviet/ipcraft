@@ -1,31 +1,42 @@
 # Quick Start
 
-This guide walks through the two main workflows: generating VHDL from a YAML
-specification, and parsing existing VHDL into a YAML specification.
+This guide walks through the main workflows: scaffolding a new IP, generating VHDL from a YAML specification, and parsing existing VHDL into a YAML specification.
 
-## Workflow 1: YAML to VHDL
+## Workflow 1: New IP Core to VHDL
 
-### 1. Define your IP core
+### 1. Scaffold your IP core
 
-Create `my_core.ip.yml`:
+The fastest way to start is using the `new` command, which generates boilerplate YAML files based on standard templates:
+
+```bash
+ipcraft new my_core --bus AXI4L
+```
+
+This generates `my_core.ip.yml` and `my_core.mm.yml` pre-configured with clocks, resets, and an AXI4-Lite bus interface, and prints an ASCII diagram of the resulting symbol.
+
+### 2. Customize the IP core
+
+Edit the generated `my_core.ip.yml` to fit your needs:
 
 ```yaml
 apiVersion: '1.0'
 vlnv:
-  vendor: my-company.com
-  library: peripherals
+  vendor: example.com
+  library: examples
   name: my_core
   version: 1.0.0
 
 description: A simple IP core with AXI-Lite registers
 
 clocks:
-  - name: i_clk
+  - name: s_axi_aclk
+    logicalName: AXI_CLK
     direction: in
     frequency: 100MHz
 
 resets:
-  - name: i_rst_n
+  - name: s_axi_aresetn
+    logicalName: AXI_RST
     direction: in
     polarity: activeLow
 
@@ -39,8 +50,8 @@ busInterfaces:
     type: AXI4L
     mode: slave
     physicalPrefix: s_axi_
-    associatedClock: i_clk
-    associatedReset: i_rst_n
+    associatedClock: s_axi_aclk
+    associatedReset: s_axi_aresetn
     memoryMapRef: CSR_MAP
     portWidthOverrides:
       AWADDR: 12
@@ -50,9 +61,9 @@ memoryMaps:
   import: my_core.mm.yml
 ```
 
-### 2. Define the memory map
+### 3. Customize the memory map
 
-Create `my_core.mm.yml`:
+Edit the generated `my_core.mm.yml`:
 
 ```yaml
 - name: CSR_MAP

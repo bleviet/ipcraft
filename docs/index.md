@@ -42,6 +42,9 @@ graph LR
 ## Quick Example
 
 ```bash
+# Bootstrap a new IP core project with a default bus interface
+ipcraft new my_core --bus AXI4L
+
 # Parse existing VHDL to YAML specification
 ipcraft parse my_core.vhd
 

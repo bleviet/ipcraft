@@ -1,9 +1,60 @@
 # CLI Reference
 
-IPCraft provides three commands: `generate`, `parse`, and `list-buses`.
+IPCraft provides four commands: `new`, `generate`, `parse`, and `list-buses`.
 
 ```bash
 ipcraft <command> [options]
+```
+
+---
+
+## `new` -- Scaffold IP Projects
+
+Create a new IP core from template, generating boilerplate `ip.yml` and `mm.yml` files.
+
+```bash
+ipcraft new <name> [options]
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--vendor` | `example.com` | VLNV vendor name |
+| `--library` | `examples` | VLNV library name |
+| `--version` | `1.0.0` | VLNV version |
+| `--bus` | None | Include a default bus interface (e.g., AXI4L) |
+| `--output`, `-o` | `.` | Output directory |
+
+### Examples
+
+```bash
+# Basic IP core
+ipcraft new my_core
+
+# Custom VLNV and output directory
+ipcraft new my_core --vendor mycompany --library peripherals --version 2.0 -o ./my-project
+
+# Scaffold with AXI4-Lite bus interface
+ipcraft new my_core --bus AXI4L
+```
+
+### Output
+
+The command generates `<name>.ip.yml` and optionally `<name>.mm.yml` files. It also prints an ASCII diagram of the resulting IP core symbol:
+
+```text
+✓ Generated ./my_core.ip.yml
+✓ Generated ./my_core.mm.yml
+
+IP Core Symbol:
+    +--------------------------+
+    |         my_core          |
+    |--------------------------|
+--> | s_axi_aclk               |
+--> | s_axi_aresetn            |
+--> | [AXI4L] S_AXI_LITE       |
+    +--------------------------+
 ```
 
 ---
