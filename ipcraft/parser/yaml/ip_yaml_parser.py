@@ -45,7 +45,6 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
     """
 
     def __init__(self):
-        self._bus_library_cache: Dict[Path, Dict[str, Any]] = {}
         self._register_templates: Dict[str, List[Dict[str, Any]]] = {}
         self._current_file: Optional[Path] = None
 
@@ -100,14 +99,6 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
 
     def _parse_ip_core(self, data: Dict[str, Any], file_path: Path) -> IpCore:
         """Parse the main IP core structure."""
-        # Required fields
-        api_version = data.get("apiVersion")
-        if not api_version:
-            raise ParseError("Missing required field: apiVersion", file_path)
-
-        # Convert numeric apiVersion to string if needed
-        api_version = str(api_version)
-
         vlnv_data = data.get("vlnv")
         if not vlnv_data:
             raise ParseError("Missing required field: vlnv", file_path)
@@ -121,13 +112,6 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
         resets = self._parse_resets(data.get("resets", []), file_path)
         ports = self._parse_ports(data.get("ports", []), file_path)
 
-        # Load bus library if specified
-        bus_library = data.get("useBusLibrary")
-        if bus_library:
-            # Resolve relative to the current file
-            bus_lib_path = (file_path.parent / bus_library).resolve()
-            self._load_bus_library(bus_lib_path)
-
         bus_interfaces = self._parse_bus_interfaces(
             data.get("busInterfaces", []), file_path
         )
@@ -140,8 +124,7 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
         file_sets = self._parse_file_sets(data.get("fileSets", []), file_path)
 
         # Create IpCore model - only pass non-empty values to use Pydantic defaults
-        kwargs = {
-            "api_version": api_version,
+        kwargs: Dict[str, Any] = {
             "vlnv": vlnv,
         }
         if description:
@@ -160,8 +143,6 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
             kwargs["parameters"] = parameters
         if file_sets:
             kwargs["file_sets"] = file_sets
-        if bus_library:
-            kwargs["use_bus_library"] = bus_library
 
         return IpCore(**kwargs)
 
@@ -320,20 +301,3 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
             )
 
         return self._parse_list(data, "parameter", build_param, file_path)
-
-    def _load_bus_library(self, file_path: Path) -> Dict[str, Any]:
-        """Load and cache bus library definitions."""
-        if file_path in self._bus_library_cache:
-            return self._bus_library_cache[file_path]
-
-        if not file_path.exists():
-            raise ParseError(f"Bus library file not found: {file_path}")
-
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                bus_lib = yaml.safe_load(f)
-        except yaml.YAMLError as e:
-            raise ParseError(f"YAML syntax error in bus library: {e}", file_path)
-
-        self._bus_library_cache[file_path] = bus_lib
-        return bus_lib

@@ -29,7 +29,6 @@ The canonical IP core representation.
 from ipcraft.model import IpCore
 
 # Fields
-ip_core.api_version      # str
 ip_core.vlnv             # VLNV
 ip_core.description      # str
 ip_core.clocks           # List[Clock]
@@ -39,7 +38,6 @@ ip_core.bus_interfaces   # List[BusInterface]
 ip_core.memory_maps      # List[MemoryMap]
 ip_core.file_sets        # List[FileSet]
 ip_core.parameters       # List[Parameter]
-ip_core.use_bus_library  # Optional[str]
 
 # Lookup by name (returns None if not found)
 ip_core.get_clock("i_clk")
@@ -118,7 +116,7 @@ reset.is_active_low  # True
 from ipcraft.model import BusInterface, ArrayConfig
 
 bi = BusInterface(
-    name="S_AXI", type="AXI4L", mode="slave",
+    name="S_AXI", type="ipcraft.busif.axi4_lite.1.0", mode="slave",
     physical_prefix="s_axi_",
     associated_clock="i_clk",
     associated_reset="i_rst_n",
@@ -130,7 +128,7 @@ bi.instance_count   # 1
 
 # With array
 bi_arr = BusInterface(
-    name="M_AXIS", type="AXIS", mode="master",
+    name="M_AXIS", type="ipcraft.busif.axi_stream.1.0", mode="master",
     array=ArrayConfig(count=4, naming_pattern="M_AXIS_CH{index}",
                       physical_prefix_pattern="m_axis_ch{index}_"),
 )
@@ -187,13 +185,13 @@ Singleton access to bus definitions.
 from ipcraft.model.bus_library import get_bus_library, BusLibrary
 
 lib = get_bus_library()
-lib.list_bus_types()                    # ["AXI4L", "AXIS", ...]
-bus_def = lib.get_bus_definition("AXI4L")
+lib.list_bus_types()                    # ["AXI4_LITE", "AXI_STREAM", ...]
+bus_def = lib.get_bus_definition("AXI4_LITE")
 bus_def.required_ports                  # List[PortDefinition]
 bus_def.optional_ports                  # List[PortDefinition]
 bus_def.get_suggested_prefix("slave")   # "s_axil_"
 
-lib.get_bus_info("AXI4L", include_ports=True)  # Dict with details
+lib.get_bus_info("AXI4_LITE", include_ports=True)  # Dict with details
 ```
 
 ---

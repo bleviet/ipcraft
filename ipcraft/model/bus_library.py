@@ -2,7 +2,7 @@
 Bus Library module.
 
 Provides access to predefined bus definitions (AXI4L, AXIS, AVALON_MM, etc.)
-from the bus_definitions.yml file.
+from the bus_definitions/ directory.
 """
 
 from dataclasses import dataclass
@@ -12,9 +12,9 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from ipcraft.model.base import VLNV
-from ipcraft.utils import BUS_DEFINITIONS_PATH
+from ipcraft.utils import BUS_DEFINITIONS_PATH, normalize_bus_type_key
 
-# Default path to bus definitions
+# Default path to bus definitions directory
 DEFAULT_BUS_DEFS_PATH = BUS_DEFINITIONS_PATH
 
 # Suggested physical prefixes for each bus type and mode
@@ -94,28 +94,50 @@ class BusLibrary:
     @classmethod
     def load(cls, path: Optional[Path] = None) -> "BusLibrary":
         """
-        Load bus definitions from YAML file.
+        Load bus definitions from the bus_definitions/ directory.
+
+        Each YAML file in the directory defines one or more bus types.
+        The directory replaced the old single ``common/bus_definitions.yml`` file.
 
         Args:
-            path: Path to bus_definitions.yml (defaults to ipcraft-spec/common/)
+            path: Path to bus_definitions/ directory (defaults to ipcraft-spec/bus_definitions/)
 
         Returns:
             BusLibrary instance
         """
         path = path or DEFAULT_BUS_DEFS_PATH
 
-        if not path.exists():
-            raise BusLibraryNotFoundError(f"Bus definitions file not found: {path}")
+        if path is None or not Path(path).exists():
+            raise BusLibraryNotFoundError(
+                f"Bus definitions directory not found: {path}"
+            )
 
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                raw_data = yaml.safe_load(f) or {}
-        except yaml.YAMLError as e:
-            raise BusLibraryError(
-                f"YAML syntax error in bus definitions file: {e}"
-            ) from e
-        except OSError as e:
-            raise BusLibraryError(f"Failed to read bus definitions file: {e}") from e
+        bus_def_dir = Path(path)
+
+        # Support both a directory of YAML files and a single legacy YAML file
+        if bus_def_dir.is_file():
+            yaml_files = [bus_def_dir]
+        else:
+            yaml_files = sorted(bus_def_dir.glob("*.yml"))
+            if not yaml_files:
+                raise BusLibraryNotFoundError(
+                    f"No YAML files found in bus definitions directory: {bus_def_dir}"
+                )
+
+        raw_data: Dict[str, Any] = {}
+        for yaml_file in yaml_files:
+            try:
+                with open(yaml_file, "r", encoding="utf-8") as f:
+                    file_data = yaml.safe_load(f) or {}
+            except yaml.YAMLError as e:
+                raise BusLibraryError(
+                    f"YAML syntax error in bus definitions file '{yaml_file}': {e}"
+                ) from e
+            except OSError as e:
+                raise BusLibraryError(
+                    f"Failed to read bus definitions file '{yaml_file}': {e}"
+                ) from e
+            raw_data.update(file_data)
 
         definitions = {}
         for key, data in raw_data.items():
@@ -138,11 +160,21 @@ class BusLibrary:
                     )
                 )
 
+            # Store under the natural key (e.g. AXI4_LITE)
             definitions[key] = BusDefinition(
                 key=key,
                 bus_type=bus_type,
                 ports=ports,
             )
+
+            # Also store under the canonical alias (e.g. AXI4L) for backward compatibility
+            canonical = normalize_bus_type_key(key)
+            if canonical != key and canonical not in definitions:
+                definitions[canonical] = BusDefinition(
+                    key=canonical,
+                    bus_type=bus_type,
+                    ports=ports,
+                )
 
         return cls(definitions)
 

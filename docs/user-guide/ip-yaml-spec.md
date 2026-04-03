@@ -7,7 +7,7 @@ IPCraft. This page covers the complete format reference.
 
 | Extension | Purpose |
 |-----------|---------|
-| `*.ip.yml` | IP Core definition (contains `apiVersion` + `vlnv`) |
+| `*.ip.yml` | IP Core definition (contains `vlnv`) |
 | `*.mm.yml` | Memory Map definition (register/address blocks) |
 | `*.fileset.yml` | File Set definition (importable file lists) |
 
@@ -16,7 +16,6 @@ IPCraft. This page covers the complete format reference.
 ## Top-Level Structure
 
 ```yaml
-apiVersion: '1.0'            # Required
 vlnv:                         # Required - unique identifier
   vendor: company.com
   library: peripherals
@@ -24,8 +23,6 @@ vlnv:                         # Required - unique identifier
   version: 1.0.0
 
 description: Brief description of the IP core
-
-useBusLibrary: path/to/bus_definitions.yml  # Optional
 
 clocks: [...]
 resets: [...]
@@ -106,7 +103,7 @@ parameterized vector widths in generated VHDL.
 ```yaml
 busInterfaces:
   - name: S_AXI_LITE
-    type: AXI4L              # Bus type key from bus library
+    type: ipcraft.busif.axi4_lite.1.0   # Fully qualified bus type (vendor.library.name.version)
     mode: slave              # slave | master | source | sink
     physicalPrefix: s_axi_   # HDL signal prefix
     associatedClock: i_clk   # References clock by name
@@ -127,7 +124,7 @@ For repeated interfaces (e.g., multi-channel streaming):
 ```yaml
 busInterfaces:
   - name: M_AXIS_DATA
-    type: AXIS
+    type: ipcraft.busif.axi_stream.1.0
     mode: master
     array:
       count: 4

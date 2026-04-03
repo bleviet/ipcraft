@@ -51,7 +51,7 @@ class ParserConfig(BaseModel):
     default_library: str = Field(default="work", description="Default library")
     default_version: str = Field(default="1.0.0", description="Default version")
     default_api_version: str = Field(
-        default="fpga-lib/v1.0", description="Schema version"
+        default="fpga-lib/v1.0", description="Schema version (deprecated, unused)"
     )
 
     # Parser behavior
@@ -379,7 +379,6 @@ class VHDLAiParser:
             version=self.config.default_version,
         )
         return IpCore(
-            api_version=self.config.default_api_version,
             vlnv=vlnv,
             description=f"Failed to parse: {source_name}",
         )
@@ -470,7 +469,6 @@ class VHDLAiParser:
         # Build IpCore
         try:
             ip_core = IpCore(
-                api_version=self.config.default_api_version,
                 vlnv=vlnv,
                 description=description,
                 ports=ports,
@@ -492,7 +490,6 @@ class VHDLAiParser:
 
             # Return minimal valid core
             return IpCore(
-                api_version=self.config.default_api_version,
                 vlnv=vlnv,
                 description=description,
             )

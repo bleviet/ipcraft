@@ -106,7 +106,7 @@ make type-check    # mypy
 
 ## Adding a New Bus Type
 
-1. Add the definition to `ipcraft-spec/common/bus_definitions.yml`
+1. Add a new definition file to `ipcraft-spec/bus_definitions/` (e.g., `my_bus.yml`)
 2. Add port-level definitions with required/optional status
 3. Add prefix suggestions to `SUGGESTED_PREFIXES` in `bus_library.py`
 4. Add aliases to `_BUS_TYPE_ALIASES` in `utils/__init__.py`

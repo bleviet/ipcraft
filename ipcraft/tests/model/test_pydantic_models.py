@@ -31,7 +31,6 @@ def test_basic_ip_core_creation():
     """Test creating a simple IP core."""
     # Create minimal IP core
     ip_core = IpCore(
-        api_version="my-ip-schema/v2.3",
         vlnv=VLNV(
             vendor="my-company.com",
             library="processing",
@@ -42,7 +41,6 @@ def test_basic_ip_core_creation():
     )
 
     assert ip_core.vlnv.full_name == "my-company.com:processing:simple_core:1.0.0"
-    assert ip_core.api_version == "my-ip-schema/v2.3"
     assert ip_core.description == "A simple test IP core"
 
 
@@ -226,7 +224,6 @@ def test_complete_ip_core():
     """Test creating a complete IP core similar to my_timer_core.yml."""
     # Create the complete IP core
     ip_core = IpCore(
-        api_version="my-ip-schema/v2.3",
         vlnv=VLNV(
             vendor="my-company.com",
             library="processing",
@@ -332,7 +329,6 @@ def test_complete_ip_core():
                 ],
             )
         ],
-        use_bus_library="../common/bus_definitions.yml",
     )
 
     # Assertions

@@ -131,7 +131,6 @@ class IpYamlGenerator:
     ) -> Dict[str, Any]:
         """Build the YAML dictionary structure."""
         data = {
-            "apiVersion": "ipcore/v1.0",
             "vlnv": {
                 "vendor": ip_core.vlnv.vendor,
                 "library": ip_core.vlnv.library,

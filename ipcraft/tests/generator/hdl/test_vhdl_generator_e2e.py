@@ -330,7 +330,6 @@ class TestIpCoreProjectGeneratorSyntaxValidation:
         )
 
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="syntax_test", version="1.0"),
             description="IP core for GHDL syntax validation",
             bus_interfaces=[bus_iface],

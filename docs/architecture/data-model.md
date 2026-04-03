@@ -53,7 +53,6 @@ The canonical IP core representation. Central to all operations.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `api_version` | `str` | Specification version (required) |
 | `vlnv` | `VLNV` | Unique identifier (required) |
 | `description` | `str` | Human-readable description |
 | `clocks` | `List[Clock]` | Clock definitions |
@@ -63,7 +62,6 @@ The canonical IP core representation. Central to all operations.
 | `memory_maps` | `List[MemoryMap]` | Register maps |
 | `file_sets` | `List[FileSet]` | Source file groups |
 | `parameters` | `List[Parameter]` | VHDL generics |
-| `use_bus_library` | `Optional[str]` | Path to bus definitions file |
 
 **Key properties:**
 
@@ -124,7 +122,7 @@ Inherits from VLNV. Identifies a bus protocol.
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | `str` | Interface name |
-| `type` | `str` | Bus type key (e.g., `"AXI4L"`) |
+| `type` | `str` | Fully qualified bus type (e.g., `"ipcraft.busif.axi4_lite.1.0"`) |
 | `mode` | `BusInterfaceMode` | `MASTER`, `SLAVE`, `SOURCE`, `SINK` |
 | `physical_prefix` | `str` | HDL signal prefix |
 | `associated_clock` | `Optional[str]` | Clock reference |

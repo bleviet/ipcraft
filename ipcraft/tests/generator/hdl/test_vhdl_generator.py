@@ -23,7 +23,6 @@ class TestIpCoreProjectGeneratorBasic:
     def test_generate_package(self):
         """Test package generation with simple IP core."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="simple_ip", version="1.0"),
             description="Simple test IP",
             ports=[],
@@ -41,7 +40,6 @@ class TestIpCoreProjectGeneratorBasic:
     def test_generate_top(self):
         """Test top-level entity generation."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="test_top", version="1.0"),
             description="Test top entity",
             ports=[],
@@ -59,7 +57,6 @@ class TestIpCoreProjectGeneratorBasic:
     def test_generate_core(self):
         """Test core module generation."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="test_core", version="1.0"),
             description="Test core module",
             ports=[],
@@ -77,7 +74,6 @@ class TestIpCoreProjectGeneratorBasic:
     def test_generate_bus_wrapper_axil(self):
         """Test AXI-Lite bus wrapper generation."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="test_bus", version="1.0"),
             description="Test bus wrapper",
             ports=[],
@@ -94,7 +90,6 @@ class TestIpCoreProjectGeneratorBasic:
     def test_generate_bus_wrapper_avmm(self):
         """Test Avalon-MM bus wrapper generation."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="test_avmm", version="1.0"),
             description="Test Avalon wrapper",
             ports=[],
@@ -111,7 +106,6 @@ class TestIpCoreProjectGeneratorBasic:
     def test_generate_all(self):
         """Test generation of all VHDL files."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="test_all", version="1.0"),
             description="Test all files",
             ports=[],
@@ -131,7 +125,6 @@ class TestIpCoreProjectGeneratorBasic:
     def test_generate_with_register_file(self):
         """Test generation including standalone register file."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="test_regfile", version="1.0"),
             description="Test with regfile",
             ports=[],
@@ -180,7 +173,6 @@ class TestIpCoreProjectGeneratorWithRegisters:
         )
 
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="reg_test", version="1.0"),
             description="Register test",
             ports=[],
@@ -197,7 +189,6 @@ class TestIpCoreProjectGeneratorWithRegisters:
     def test_generate_with_user_ports(self):
         """Test generation with user-defined ports."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="port_test", version="1.0"),
             description="Port test",
             ports=[
@@ -223,7 +214,6 @@ class TestIpCoreProjectGeneratorVendorFiles:
     def test_generate_intel_hw_tcl(self):
         """Test Intel Platform Designer _hw.tcl generation."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="intel_test", version="1.0"),
             description="Intel test",
             ports=[],
@@ -240,7 +230,6 @@ class TestIpCoreProjectGeneratorVendorFiles:
     def test_generate_xilinx_component_xml(self):
         """Test Xilinx component.xml generation."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="xilinx_test", version="1.0"),
             description="Xilinx test",
             ports=[],
@@ -262,7 +251,6 @@ class TestIpCoreProjectGeneratorTestbench:
     def test_generate_cocotb_test(self):
         """Test cocotb test file generation."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="tb_test", version="1.0"),
             description="Testbench test",
             ports=[],
@@ -279,7 +267,6 @@ class TestIpCoreProjectGeneratorTestbench:
     def test_generate_cocotb_makefile(self):
         """Test cocotb Makefile generation."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="make_test", version="1.0"),
             description="Makefile test",
             ports=[],
@@ -297,7 +284,6 @@ class TestIpCoreProjectGeneratorTestbench:
     def test_generate_testbench_files(self):
         """Test generation of all testbench files."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="tb_all", version="1.0"),
             description="All testbench files",
             ports=[],

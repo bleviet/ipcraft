@@ -209,7 +209,6 @@ class VHDLParser:
 
                 # Create IPCore directly
                 ip_core = IpCore(
-                    api_version="1.0",
                     vlnv=vlnv,
                     description=f"Parsed from VHDL entity {entity_name}",
                     ports=ports,
@@ -490,7 +489,6 @@ class VHDLParser:
                         version="1.0",
                     )
                     ip_core = IpCore(
-                        api_version="1.0",
                         vlnv=vlnv,
                         description="Parsed from VHDL (regex fallback)",
                         ports=ports,

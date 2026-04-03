@@ -26,7 +26,6 @@ Loads and parses a `*.ip.yml` file. Resolves:
 
 - Memory map imports (`memoryMaps: {import: file.mm.yml}`)
 - FileSet imports (`fileSets: [{import: file.fileset.yml}]`)
-- Bus library loading (`useBusLibrary: path/to/bus_definitions.yml`)
 
 Raises `ParseError` on invalid input with file path and line context.
 

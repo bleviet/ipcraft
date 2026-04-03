@@ -19,7 +19,6 @@ EXAMPLES_DIR = Path(__file__).parent.parent.parent.parent / "examples" / "ip"
 def test_parse_simple_ip_core(tmp_path):
     """Test parsing a minimal IP core definition."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -33,7 +32,6 @@ description: "A simple test core"
     parser = YamlIpCoreParser()
     ip_core = parser.parse_file(yaml_file)
 
-    assert ip_core.api_version == "my-ip-schema/v2.3"
     assert ip_core.vlnv.vendor == "test.com"
     assert ip_core.vlnv.library == "test"
     assert ip_core.vlnv.name == "simple_core"
@@ -44,7 +42,6 @@ description: "A simple test core"
 def test_parse_with_clocks_and_resets(tmp_path):
     """Test parsing clocks and resets."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -91,7 +88,6 @@ resets:
 def test_parse_with_ports(tmp_path):
     """Test parsing port definitions."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -126,7 +122,6 @@ ports:
 def test_parse_bus_interface(tmp_path):
     """Test parsing bus interface definitions."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -171,7 +166,6 @@ busInterfaces:
 def test_parse_bus_interface_array(tmp_path):
     """Test parsing bus interface with array configuration."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -207,7 +201,6 @@ busInterfaces:
 def test_parse_parameters(tmp_path):
     """Test parsing parameter definitions."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -240,7 +233,6 @@ parameters:
 def test_parse_memory_map_inline(tmp_path):
     """Test parsing inline memory map definitions."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -311,7 +303,6 @@ memoryMaps:
 def test_parse_file_sets(tmp_path):
     """Test parsing file set definitions."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -364,7 +355,6 @@ def test_parse_memory_map_with_import(tmp_path):
 
     # Create main IP core file
     yaml_content = f"""
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -432,7 +422,6 @@ def test_parse_real_timer_core():
 def test_error_missing_required_field(tmp_path):
     """Test error handling for missing required fields."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 description: "Missing VLNV"
 """
     yaml_file = tmp_path / "invalid.yml"
@@ -448,7 +437,6 @@ description: "Missing VLNV"
 def test_error_invalid_yaml(tmp_path):
     """Test error handling for invalid YAML syntax."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com
     # Missing closing quote
@@ -475,7 +463,6 @@ def test_error_file_not_found():
 def test_auto_offset_calculation(tmp_path):
     """Test automatic offset calculation for registers."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"
@@ -512,7 +499,6 @@ memoryMaps:
 def test_bit_field_auto_offset(tmp_path):
     """Test automatic bit offset calculation for fields."""
     yaml_content = """
-apiVersion: my-ip-schema/v2.3
 vlnv:
     vendor: "test.com"
     library: "test"

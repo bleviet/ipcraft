@@ -35,7 +35,6 @@ class TestTemplateRendering:
     def simple_ip_core(self):
         """Create a simple IP core for testing."""
         return IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(
                 vendor="test", library="lib", name="template_test", version="1.0"
             ),
@@ -97,7 +96,6 @@ class TestTemplateRendering:
         )
 
         return IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="reg_test", version="1.0"),
             description="Register test IP",
             ports=[],
@@ -109,7 +107,6 @@ class TestTemplateRendering:
     def ip_core_with_ports(self):
         """Create an IP core with ports."""
         return IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="port_test", version="1.0"),
             description="Port test IP",
             ports=[
@@ -371,7 +368,6 @@ class TestTemplateEdgeCases:
     def test_empty_memory_map(self, generator):
         """Test templates with empty memory maps."""
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="empty", version="1.0"),
             description="Empty test",
             ports=[],
@@ -415,7 +411,6 @@ class TestTemplateEdgeCases:
         )
 
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="flags", version="1.0"),
             description="Flags test",
             memory_maps=[memory_map],
@@ -457,7 +452,6 @@ class TestTemplateEdgeCases:
         )
 
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="wide", version="1.0"),
             description="Wide register test",
             memory_maps=[memory_map],
@@ -479,7 +473,6 @@ class TestTemplateEdgeCases:
         ]
 
         ip_core = IpCore(
-            api_version="test/v1.0",
             vlnv=VLNV(vendor="test", library="lib", name="many_ports", version="1.0"),
             description="Many ports test",
             ports=ports,

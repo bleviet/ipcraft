@@ -23,7 +23,7 @@ ipcraft new <name> [options]
 | `--vendor` | `example.com` | VLNV vendor name |
 | `--library` | `examples` | VLNV library name |
 | `--version` | `1.0.0` | VLNV version |
-| `--bus` | None | Include a default bus interface (e.g., AXI4L) |
+| `--bus` | None | Include a default bus interface (e.g., `AXI4_LITE`) |
 | `--output`, `-o` | `.` | Output directory |
 
 ### Examples
@@ -36,7 +36,7 @@ ipcraft new my_core
 ipcraft new my_core --vendor mycompany --library peripherals --version 2.0 -o ./my-project
 
 # Scaffold with AXI4-Lite bus interface
-ipcraft new my_core --bus AXI4L
+ipcraft new my_core --bus AXI4_LITE
 ```
 
 ### Output
@@ -53,7 +53,7 @@ IP Core Symbol:
     |--------------------------|
 --> | s_axi_aclk               |
 --> | s_axi_aresetn            |
---> | [AXI4L] S_AXI_LITE       |
+--> | [AXI4_LITE] S_AXI_LITE     |
     +--------------------------+
 ```
 
@@ -199,20 +199,21 @@ ipcraft list-buses [bus_type] [options]
 ipcraft list-buses
 
 # Show AXI4-Lite details
-ipcraft list-buses AXI4L
+ipcraft list-buses AXI4_LITE
 
 # Show AXI4-Lite port definitions
-ipcraft list-buses AXI4L --ports
+ipcraft list-buses AXI4_LITE --ports
 ```
 
 ### Available Bus Types
 
-| Key | VLNV | Description |
-|-----|------|-------------|
-| `AXI4L` | `arm.com/amba/axi4l/r0p0_0` | AXI4-Lite memory-mapped |
-| `AXIS` | `arm.com/amba/axis/1.0` | AXI-Stream data flow |
-| `AVALON_MM` | `intel.com/avalon/avalon_mm/1.0` | Avalon Memory-Mapped |
-| `AVALON_ST` | `intel.com/avalon/avalon_st/1.0` | Avalon Streaming |
+| Key | Full Type | Description |
+|-----|-----------|-------------|
+| `AXI4_LITE` | `ipcraft.busif.axi4_lite.1.0` | AXI4-Lite memory-mapped |
+| `AXI_STREAM` | `ipcraft.busif.axi_stream.1.0` | AXI-Stream data flow |
+| `AVALON_MM` | `ipcraft.busif.avalon_mm.1.0` | Avalon Memory-Mapped |
+| `AVALON_ST` | `ipcraft.busif.avalon_st.1.0` | Avalon Streaming |
+| `AXI4_FULL` | `ipcraft.busif.axi4_full.1.0` | AXI4 Full memory-mapped |
 
 ---
 

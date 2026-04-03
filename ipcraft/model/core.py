@@ -2,7 +2,7 @@
 
 from typing import List, Optional, Sequence, TypeVar
 
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from .base import VLNV, Parameter, StrictModel
 from .bus import BusInterface
@@ -28,9 +28,6 @@ class IpCore(StrictModel):
     """
 
     # Metadata
-    api_version: str = Field(
-        ..., description="Schema version (e.g., 'my-ip-schema/v2.3')"
-    )
     vlnv: VLNV = Field(..., description="Unique identifier")
     description: str = Field(default="", description="IP core description")
 
@@ -54,21 +51,6 @@ class IpCore(StrictModel):
     parameters: List[Parameter] = Field(
         default_factory=list, description="Generics/parameters"
     )
-
-    # Bus library reference
-    use_bus_library: Optional[str] = Field(
-        default=None, description="Path to bus definitions library"
-    )
-
-    @field_validator("api_version")
-    @classmethod
-    def validate_api_version(cls, v: str) -> str:
-        """Ensure API version is not empty."""
-        if not v or not v.strip():
-            raise ValueError("API version cannot be empty")
-        return v.strip()
-
-    # --- Convenience accessors ---
 
     @staticmethod
     def _find_by_name(items: Sequence[NamedItem], name: str) -> Optional[NamedItem]:

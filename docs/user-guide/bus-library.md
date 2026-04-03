@@ -6,12 +6,16 @@ bus type.
 
 ## Supported Bus Types
 
-| Key | VLNV | Modes |
-|-----|------|-------|
-| `AXI4L` | `arm.com/amba/axi4l/r0p0_0` | slave, master |
-| `AXIS` | `arm.com/amba/axis/1.0` | source, sink |
-| `AVALON_MM` | `intel.com/avalon/avalon_mm/1.0` | slave, master |
-| `AVALON_ST` | `intel.com/avalon/avalon_st/1.0` | source, sink |
+| Key | Full Type | Modes |
+|-----|-----------|-------|
+| `AXI4_LITE` | `ipcraft.busif.axi4_lite.1.0` | slave, master |
+| `AXI_STREAM` | `ipcraft.busif.axi_stream.1.0` | source, sink |
+| `AVALON_MM` | `ipcraft.busif.avalon_mm.1.0` | slave, master |
+| `AVALON_ST` | `ipcraft.busif.avalon_st.1.0` | source, sink |
+| `AXI4_FULL` | `ipcraft.busif.axi4_full.1.0` | slave, master |
+
+The `type` field in bus interface definitions uses the fully qualified
+`vendor.library.name.version` format (e.g., `ipcraft.busif.axi4_lite.1.0`).
 
 ## Type Aliases
 
@@ -20,10 +24,10 @@ type is expected:
 
 | Alias | Resolves to |
 |-------|-------------|
-| `AXIL`, `AXI4-LITE`, `AXI4LITE` | `AXI4L` |
+| `AXIL`, `AXI4L`, `AXI4-LITE`, `AXI4LITE` | `AXI4_LITE` |
 | `AVMM`, `AVALON-MM` | `AVALON_MM` |
 | `AVST`, `AVALON-ST` | `AVALON_ST` |
-| `AXI-STREAM`, `AXISTREAM` | `AXIS` |
+| `AXIS`, `AXI-STREAM`, `AXISTREAM` | `AXI_STREAM` |
 
 ## Physical Prefix Conventions
 
@@ -31,8 +35,8 @@ Each bus type has suggested prefixes based on mode:
 
 | Bus Type | Slave/Sink Prefix | Master/Source Prefix |
 |----------|-------------------|----------------------|
-| `AXI4L` | `s_axil_` | `m_axil_` |
-| `AXIS` | `s_axis_` | `m_axis_` |
+| `AXI4_LITE` | `s_axil_` | `m_axil_` |
+| `AXI_STREAM` | `s_axis_` | `m_axis_` |
 | `AVALON_MM` | `avs_` | `avm_` |
 | `AVALON_ST` | `asi_` | `aso_` |
 
@@ -49,7 +53,7 @@ directions. Use the CLI to inspect:
 ipcraft list-buses
 
 # Show AXI4-Lite ports
-ipcraft list-buses AXI4L --ports
+ipcraft list-buses AXI4_LITE --ports
 ```
 
 ### Using Optional Ports
@@ -60,7 +64,7 @@ By default, only required ports are included. Add optional signals via
 ```yaml
 busInterfaces:
   - name: S_AXI_LITE
-    type: AXI4L
+    type: ipcraft.busif.axi4_lite.1.0
     mode: slave
     useOptionalPorts:
       - AWPROT
@@ -79,17 +83,21 @@ portWidthOverrides:
   RDATA: 32
 ```
 
-## Bus Definitions File
+## Bus Definitions Directory
 
-The bus library is defined in `ipcraft-spec/common/bus_definitions.yml`. The
-`useBusLibrary` field in the IP YAML points to this file:
+The bus library is defined in `ipcraft-spec/bus_definitions/`, with one file
+per bus type:
 
-```yaml
-useBusLibrary: ../common/bus_definitions.yml
-```
+| File | Bus Type |
+|------|----------|
+| `axi4_lite.yml` | AXI4-Lite |
+| `axi_stream.yml` | AXI-Stream |
+| `avalon_mm.yml` | Avalon Memory-Mapped |
+| `avalon_st.yml` | Avalon Streaming |
+| `axi4_full.yml` | AXI4 Full |
 
-If omitted, IPCraft loads the default bus definitions bundled with the
-`ipcraft-spec` package.
+IPCraft loads the bus definitions bundled with the `ipcraft-spec` package
+automatically. No configuration is required in the IP YAML.
 
 ## Programmatic Access
 
@@ -103,7 +111,7 @@ for bus_type in lib.list_bus_types():
     print(bus_type)
 
 # Get definition details
-bus_def = lib.get_bus_definition("AXI4L")
+bus_def = lib.get_bus_definition("AXI4_LITE")
 print(bus_def.description)
 print(bus_def.required_ports)
 print(bus_def.optional_ports)

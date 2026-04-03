@@ -9,7 +9,7 @@ This guide walks through the main workflows: scaffolding a new IP, generating VH
 The fastest way to start is using the `new` command, which generates boilerplate YAML files based on standard templates:
 
 ```bash
-ipcraft new my_core --bus AXI4L
+ipcraft new my_core --bus AXI4_LITE
 ```
 
 This generates `my_core.ip.yml` and `my_core.mm.yml` pre-configured with clocks, resets, and an AXI4-Lite bus interface, and prints an ASCII diagram of the resulting symbol.
@@ -19,7 +19,6 @@ This generates `my_core.ip.yml` and `my_core.mm.yml` pre-configured with clocks,
 Edit the generated `my_core.ip.yml` to fit your needs:
 
 ```yaml
-apiVersion: '1.0'
 vlnv:
   vendor: example.com
   library: examples
@@ -47,7 +46,7 @@ ports:
 
 busInterfaces:
   - name: S_AXI_LITE
-    type: AXI4L
+    type: ipcraft.busif.axi4_lite.1.0
     mode: slave
     physicalPrefix: s_axi_
     associatedClock: s_axi_aclk

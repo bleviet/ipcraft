@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Tuple, Any
 from enum import Enum
 
-# Try to find ipcraft-spec via package resource or relative path
+# Try to find ipcraft-spec bus_definitions directory via package resource or relative path
 BUS_DEFINITIONS_PATH = None
 
 # 1. Try importlib (if installed as package)
@@ -15,12 +15,8 @@ if sys.version_info >= (3, 9):
     import importlib.resources
 
     try:
-        # Access 'common' directory from 'ipcraft_spec' package
-        # Note: 'ipcraft_spec' is the imported package name (normalized from ipcraft-spec)
-        ref = (
-            importlib.resources.files("ipcraft_spec") / "common" / "bus_definitions.yml"
-        )
-        if ref.is_file():
+        ref = importlib.resources.files("ipcraft_spec") / "bus_definitions"
+        if ref.is_dir():
             BUS_DEFINITIONS_PATH = ref
     except (ImportError, ModuleNotFoundError):
         pass
@@ -29,18 +25,13 @@ if sys.version_info >= (3, 9):
 if BUS_DEFINITIONS_PATH is None:
     # utils is in ipcraft/utils/__init__.py
     # Repo root is 2 levels up (ipcraft/ipcraft -> ipcraft)
-    # Sibling repo ipcraft-spec is ../ipcraft-spec
     repo_root = Path(__file__).resolve().parent.parent.parent
-    sibling_path = repo_root.parent / "ipcraft-spec" / "common" / "bus_definitions.yml"
+    sibling_path = repo_root.parent / "ipcraft-spec" / "bus_definitions"
 
     if sibling_path.exists():
         BUS_DEFINITIONS_PATH = sibling_path
     else:
-        # Fallback to internal path if bundled (e.g. usage in VS Code extension context if copied)
-        # or error
-        BUS_DEFINITIONS_PATH = (
-            repo_root / "ipcraft-spec" / "common" / "bus_definitions.yml"
-        )
+        BUS_DEFINITIONS_PATH = repo_root / "ipcraft-spec" / "bus_definitions"
 
 
 def parse_bit_range(bits_str: str) -> Tuple[int, int]:
@@ -77,7 +68,9 @@ def parse_bit_range(bits_str: str) -> Tuple[int, int]:
 
 
 # Step 1: Canonical bus type keys (alias → canonical key)
+# Includes old short-form aliases and new fully-qualified dot-format names.
 _BUS_TYPE_ALIASES: dict[str, str] = {
+    # Old short-form aliases (deprecated)
     "AXIL": "AXI4L",
     "AXI4-LITE": "AXI4L",
     "AXI4LITE": "AXI4L",
@@ -86,17 +79,34 @@ _BUS_TYPE_ALIASES: dict[str, str] = {
     "AVALON-MM": "AVALON_MM",
     "AVALONMM": "AVALON_MM",
     "AVALON_MM": "AVALON_MM",
+    # New spec keys (bus_definitions/ directory keys) → canonical key
+    "AXI4_LITE": "AXI4L",
+    "AXI_STREAM": "AXIS",
+    "AVALON_MEMORY_MAPPED": "AVALON_MM",
+    "AVALON_STREAMING": "AVALON_ST",
+    "AXI4_FULL": "AXI4",
+    # New dot-separated fully qualified format (vendor.library.name.version)
+    "IPCRAFT.BUSIF.AXI4_LITE.1.0": "AXI4L",
+    "IPCRAFT.BUSIF.AXI_STREAM.1.0": "AXIS",
+    "IPCRAFT.BUSIF.AVALON_MM.1.0": "AVALON_MM",
+    "IPCRAFT.BUSIF.AVALON_ST.1.0": "AVALON_ST",
+    "IPCRAFT.BUSIF.AXI4_FULL.1.0": "AXI4",
 }
 
 # Step 2: Canonical key → generator code (what the template system uses)
 _CANONICAL_TO_GENERATOR: dict[str, str] = {
     "AXI4L": "axil",
     "AVALON_MM": "avmm",
+    "AXI4": "axil",
 }
 
 
 def normalize_bus_type_key(raw: str) -> str:
-    """Normalize a bus type string to its canonical key (e.g. 'axil' → 'AXI4L')."""
+    """Normalize a bus type string to its canonical key (e.g. 'axil' → 'AXI4L').
+
+    Handles short-form names (AXI4L), new spec directory keys (AXI4_LITE),
+    and fully qualified dot-separated names (ipcraft.busif.axi4_lite.1.0).
+    """
     upper = raw.upper() if isinstance(raw, str) else str(raw).upper()
     canonical = _BUS_TYPE_ALIASES.get(upper, upper)
     if upper in _BUS_TYPE_ALIASES and upper != canonical:

@@ -29,9 +29,9 @@ def generate_new_ip(
     # Locate templates in ipcraft-spec
     # Based on BUS_DEFINITIONS_PATH which is in common/bus_definitions.yml
     if BUS_DEFINITIONS_PATH is None:
-        raise FileNotFoundError("Could not find ipcraft-spec bus_definitions.yml path")
+        raise FileNotFoundError("Could not find ipcraft-spec bus_definitions/ path")
 
-    spec_dir = Path(BUS_DEFINITIONS_PATH).parent.parent
+    spec_dir = Path(BUS_DEFINITIONS_PATH).parent
     templates_dir = spec_dir / "templates"
 
     # Select template based on bus_type
@@ -53,9 +53,6 @@ def generate_new_ip(
     ip_content = re.sub(r"library:\s*.*", f"library: {library}", ip_content, count=1)
     ip_content = re.sub(r"name:\s*.*", f"name: {name}", ip_content, count=1)
     ip_content = re.sub(r"version:\s*.*", f"version: {version}", ip_content, count=1)
-
-    # Remove relative useBusLibrary to use the system default
-    ip_content = re.sub(r"useBusLibrary:\s*.*\n", "", ip_content)
 
     # Update memory map import if it exists
     if "import:" in ip_content and ".mm.yml" in ip_content:

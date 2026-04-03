@@ -234,7 +234,6 @@ class VerilogParser:
                     vendor="parsed", library="verilog", name=module_name, version="1.0"
                 )
                 result["module"] = IpCore(
-                    api_version="1.0",
                     vlnv=vlnv,
                     description=f"Parsed from Verilog module {module_name}",
                     ports=ports,
@@ -323,7 +322,6 @@ class VerilogParser:
 
         vlnv = VLNV(vendor="parsed", library="verilog", name=module_name, version="1.0")
         ip_core = IpCore(
-            api_version="1.0",
             vlnv=vlnv,
             description=f"Parsed from Verilog module {module_name}",
             ports=ports,
