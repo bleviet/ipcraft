@@ -455,9 +455,11 @@ implemented:
    the first slave) into `top.vhdl.j2`.  The context already contains the full
    interface list.
 
-4. **Document the `managed` flag** — add a `managed: false` example and
-   explanation to the generated `.ip.yml` scaffold and to the user guide.
-   The feature exists; almost no one will find it without documentation.
+4. ~~**Document the `managed` flag**~~ ✅ **Done** — `managed: false` is now
+   documented with a full behaviour table, worked example, and tip admonition in
+   the [IP YAML spec](../user-guide/ip-yaml-spec.md#the-managed-flag) and the
+   [CLI reference](../user-guide/cli.md#managed-vs-unmanaged-files).
+   `{name}_core.vhd` is already auto-marked `managed: false` by `generate`.
 
 ### P1 — Nice to have
 

@@ -199,6 +199,59 @@ fileSets:
   - import: ../common/base.fileset.yml
 ```
 
+### File Properties
+
+Each entry under `files` accepts the following fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `path` | string | required | Path to the file, relative to the `.ip.yml` |
+| `type` | string | required | File type (see below) |
+| `description` | string | `""` | Human-readable description |
+| `managed` | boolean | `true` | Whether `ipcraft generate` may overwrite this file |
+| `is_include_file` | boolean | `false` | Mark as a VHDL/Verilog include file |
+| `logical_name` | string | `""` | Library name (e.g. VHDL work library) |
+
+### The `managed` Flag
+
+The `managed` flag controls whether `ipcraft generate` will overwrite a file
+that already exists on disk.
+
+| `managed` | File exists | Behaviour |
+|-----------|-------------|-----------|
+| `true` (default) | no | File is created |
+| `true` (default) | yes | File is **overwritten** |
+| `false` | no | File is created (first run only) |
+| `false` | yes | File is **skipped** — your edits are preserved |
+
+`ipcraft generate` automatically sets `managed: false` on `{name}_core.vhd` (the
+bus-agnostic core logic stub) so your implementation is never overwritten when you
+regenerate after adding registers or changing the bus width.
+
+You can protect any other file the same way:
+
+```yaml
+fileSets:
+  - name: RTL_Sources
+    files:
+      - path: rtl/my_core_pkg.vhd      # managed: true (default) — regenerated
+        type: vhdl
+      - path: rtl/my_core_core.vhd     # user implementation — never overwritten
+        type: vhdl
+        managed: false
+      - path: rtl/my_core.vhd          # managed: true (default) — regenerated
+        type: vhdl
+```
+
+!!! tip "Protecting additional files"
+    If you edit a generated file (for example, to customise the AXI-Lite wrapper),
+    add `managed: false` to that entry.  The next `generate` run will leave it
+    untouched while still updating all other managed files.
+
+The `fileSets` section is written automatically by `ipcraft generate
+--update-yaml` (the default).  You only need to edit it manually to protect files
+you have customised.
+
 ### Supported File Types
 
 `vhdl`, `verilog`, `systemverilog`, `xdc`, `sdc`, `c_header`, `python`, `tcl`,

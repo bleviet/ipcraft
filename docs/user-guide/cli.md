@@ -111,7 +111,7 @@ output/
   rtl/
     {name}_pkg.vhd        # Package with types and records
     {name}.vhd            # Top-level entity
-    {name}_core.vhd       # Core logic (bus-agnostic)
+    {name}_core.vhd       # Core logic (bus-agnostic) — UNMANAGED
     {name}_axil.vhd       # AXI-Lite bus wrapper
     {name}_regs.vhd       # Standalone register bank
   tb/
@@ -123,6 +123,32 @@ output/
     component.xml          # IP-XACT component descriptor
     xgui/{name}_v*.tcl     # Vivado GUI definition
 ```
+
+### Managed vs. unmanaged files
+
+By default, every generated file is **managed** — it will be overwritten on the
+next `generate` run.  The exception is `{name}_core.vhd`, which is marked
+`managed: false` in the `fileSets` section of the IP YAML so your core logic is
+never lost.
+
+You can protect any other file you have customised by adding `managed: false` to
+its entry in `fileSets`:
+
+```yaml
+fileSets:
+  - name: RTL_Sources
+    files:
+      - path: rtl/my_core_axil.vhd
+        type: vhdl
+        managed: false   # I've hand-edited the AXI wrapper — preserve it
+```
+
+Files marked `managed: false` are only created on the first `generate` run (when
+they do not yet exist).  Subsequent runs leave them untouched.  All other files
+are regenerated as normal.
+
+See [File Sets in the IP YAML spec](ip-yaml-spec.md#file-sets) for the full
+`managed` flag reference.
 
 ---
 
