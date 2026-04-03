@@ -43,16 +43,17 @@ ipcraft new pwm_core \
 the terminal prints an ASCII block diagram of the IP:
 
 ```
-┌──────────────────────────────────┐
-│           pwm_core               │
-│  vendor : acme-fpga.com          │
-│  version: 1.0.0                  │
-├──────────┬───────────────────────┤
-│ CLOCKS   │ i_clk  100MHz         │
-│ RESETS   │ i_rst_n  activeLow    │
-├──────────┴───────────────────────┤
-│ S_AXI_LITE ◄ slave  (CSR_MAP)   │
-└──────────────────────────────────┘
+✓ Generated /tmp/pwm_poc/pwm_core/pwm_core.ip.yml
+✓ Generated /tmp/pwm_poc/pwm_core/pwm_core.mm.yml
+
+IP Core Symbol:
+    +--------------------------------------------------+
+    |                     pwm_core                     |
+    |--------------------------------------------------|
+--> | s_axi_aclk                                       |
+--> | s_axi_aresetn                                    |
+--> | [ipcraft.busif.axi4_lite.1.0] S_AXI_LITE         |
+    +--------------------------------------------------+
 ```
 
 This is a great first impression.  The generated `.ip.yml` uses the new dot-separated
@@ -141,28 +142,29 @@ ipcraft generate pwm_core/pwm_core.ip.yml \
   --regs
 ```
 
-In under a second, the following tree is written to disk:
+In under a second, the tool confirms:
 
 ```
-pwm_core_generated/
+✓ Generated 10 files to: pwm_core_generated
+
+Directory structure for 'pwm_core':
   rtl/
-    pwm_core_pkg.vhd       ← types, records, constants (register map as record)
-    pwm_core.vhd           ← top-level entity (instantiates core + AXI-Lite wrapper)
-    pwm_core_core.vhd      ← bus-agnostic application logic placeholder
-    pwm_core_axil.vhd      ← AXI4-Lite slave register interface
-    pwm_core_regs.vhd      ← standalone register bank (useful for re-use)
+    pwm_core_pkg.vhd      - Package (types, records)
+    pwm_core.vhd          - Top-level entity
+    pwm_core_core.vhd     - Core logic
+    pwm_core_axil.vhd     - AXI-Lite bus wrapper
+    pwm_core_regs.vhd     - Register bank
   tb/
-    pwm_core_test.py       ← Cocotb testbench (reads/writes every register)
-    Makefile               ← sim Makefile (GHDL/Verilator backend, configurable)
+    pwm_core_test.py      - Cocotb testbench
+    Makefile            - Simulation makefile
   intel/
-    pwm_core_hw.tcl        ← Platform Designer component (auto-configures GUI)
+    pwm_core_hw.tcl       - Platform Designer
   xilinx/
-    component.xml          ← IP-XACT 2.1 descriptor
-    xgui/
-      pwm_core_v1_0.tcl    ← Vivado GUI customization script
+    component.xml       - IP-XACT
+    xgui/pwm_core_v1_0_0.tcl  - Vivado GUI
 ```
 
-**This is the killer feature.**  Fourteen files across four tool ecosystems, all
+**This is the killer feature.**  Ten files across four tool ecosystems, all
 consistent, all derived from a single source of truth.  Before ipcraft, keeping
 these four artefacts in sync was a recurring maintenance burden.  Now I make one
 change to `pwm_core.mm.yml`, re-run `generate`, and all four are updated
@@ -206,29 +208,90 @@ end if;
 
 ### Step 5 — Simulation
 
+Before generating I also ran `ipcraft validate`, which is wired to the CLI:
+
 ```bash
-cd pwm_core_generated/tb
-make SIM=ghdl
+ipcraft validate pwm_core/pwm_core.ip.yml
+# ✓ pwm_core/pwm_core.ip.yml is valid
 ```
 
-The Cocotb testbench runs.  The register read/write accesses pass on the first try.
-I add my own test cases in Python using the generated driver:
+Then:
+
+```bash
+cd pwm_core_generated/tb
+PYTHONPATH=/path/to/ipcraft:$PYTHONPATH make SIM=ghdl
+```
+
+> **Note on PYTHONPATH:** The generated Makefile infers the ipcraft package
+> location by walking four directory levels up from `tb/`.  This matches the
+> layout when using ipcraft inside its own repository examples.  When running
+> from an arbitrary project directory, set `PYTHONPATH` explicitly or install
+> ipcraft into the system/venv Python.
+
+Here is the actual terminal output (condensed):
+
+```
+     0.00ns INFO     cocotb   Running on GHDL version 6.0.0-dev [Dunoon edition]
+     0.00ns INFO     cocotb   Running tests with cocotb v1.9.2
+     0.00ns INFO     cocotb.regression   Found test pwm_core_test.test_register_access
+     0.00ns INFO     cocotb.regression   Found test pwm_core_test.test_field_access
+     0.00ns INFO     cocotb.regression   running test_register_access (1/2)
+   110.00ns INFO     cocotb.pwm_core   Reset complete
+   110.00ns INFO     cocotb.pwm_core   Discovering registers...
+   110.00ns INFO     cocotb.pwm_core     Register: CTRL  @ 0x0000
+   110.00ns INFO     cocotb.pwm_core     Register: DUTY  @ 0x0008
+   110.00ns INFO     cocotb.pwm_core     Register: PERIOD @ 0x0004
+   110.00ns INFO     cocotb.pwm_core     Register: STATUS @ 0x000C
+   110.00ns INFO     cocotb.pwm_core   Testing registers with async read/write...
+   200.00ns INFO     cocotb.pwm_core     REGS.CTRL:   wrote 0xA5A5A5A5, read 0x00000005
+   290.00ns INFO     cocotb.pwm_core     REGS.DUTY:   wrote 0xA5A5A5A5, read 0xA5A5A5A5
+   380.00ns INFO     cocotb.pwm_core     REGS.PERIOD: wrote 0xA5A5A5A5, read 0xA5A5A5A5
+   470.00ns INFO     cocotb.pwm_core     REGS.STATUS: wrote 0xA5A5A5A5, read 0x00000001
+   470.00ns INFO     cocotb.pwm_core   All register tests completed!
+   470.00ns INFO     cocotb.regression   test_register_access passed
+   720.00ns INFO     cocotb.pwm_core   Field REGS.CTRL.ENABLE: wrote 1, read 1
+   720.00ns INFO     cocotb.pwm_core   Field access test passed!
+   720.00ns INFO     cocotb.regression   test_field_access passed
+
+** TESTS=2 PASS=2 FAIL=0 SKIP=0        720.00ns   0.24s **
+```
+
+Both tests pass.  A few observations from the actual run:
+
+- **CTRL readback (0x00000005):** Only bits [2:0] are writable — the record
+  type masks unconnected bits, so writing `0xA5A5A5A5` reads back only the
+  defined field bits `0b101 = 0x05`.  This is correct behaviour.
+- **DUTY / PERIOD readback:** Full 32-bit round-trip — matches write value.
+- **STATUS readback (0x00000001):** ACTIVE bit holds the reset-driven value;
+  writing to STATUS is accepted but only the defined field bits are stored.
+
+I add my own test cases using the generated driver:
 
 ```python
 from ipcraft.driver import load_driver
 from ipcraft.driver.bus import CocotbBus
 
-bus = CocotbBus(dut, "s_axi_")
-driver = load_driver("../pwm_core_generated/rtl/pwm_core.mm.yml", bus)
+bus = CocotbBus(dut, "s_axi", dut.s_axi_aclk, dut.s_axi_aresetn, bus_type="axil")
+driver = load_driver("../../pwm_core.mm.yml", bus)
 
-await driver.CSR_MAP.REGS.PERIOD.write_async(999)   # 1000-cycle period
-await driver.CSR_MAP.REGS.DUTY.write_async(499)     # 50% duty
-await driver.CSR_MAP.REGS.CTRL.write_field_async("ENABLE", 1)
+await driver.REGS.PERIOD.write(999)        # 1000-cycle period
+await driver.REGS.DUTY.write(499)          # 50% duty
+await driver.REGS.CTRL.write_field("ENABLE", 1)
 ```
 
-The attribute-path API — `driver.CSR_MAP.REGS.PERIOD` — mirrors the YAML hierarchy
-exactly.  This eliminates an entire class of testbench bugs where the Python model
-and the VHDL model drift apart.
+**Actual first-run experience:** Two template bugs surfaced before the testbench
+ran (both since fixed in the codebase):
+
+1. Flat registers (no sub-fields, such as `PERIOD` and `DUTY`) were missing their
+   `t_reg_<name>` type definition in the generated package — the aggregate record
+   referenced them but they were never declared.
+2. The `t_regs_hw2sw` placeholder type was absent when no registers were
+   classified as purely read-only, breaking the AXI-Lite wrapper and core
+   entity ports.
+
+Both fixes are straightforward template additions — a `{% else %}` block for
+flat registers and a guaranteed placeholder for the hw2sw record when empty.
+After the fixes, `make SIM=ghdl` compiled and simulated cleanly in one attempt.
 
 ---
 
@@ -247,12 +310,12 @@ The Platform Designer script correctly registers clock/reset interfaces.
 |-------|---------------:|---------------------:|--------:|
 | Register map definition | 1.0 | 0.5 | 2× |
 | VHDL scaffolding | 3.0 | 0.1 | 30× |
-| Cocotb testbench skeleton | 1.5 | 0.1 | 15× |
+| Cocotb testbench skeleton | 1.5 | 0.1 + 0.5 debug | ~5× |
 | Intel/Xilinx integration files | 1.5 | 0.1 | 15× |
 | Core logic implementation | 2.0 | 2.0 | 1× |
-| **Total (excluding core logic)** | **7.0** | **0.8** | **~9×** |
+| **Total (excluding core logic)** | **7.0** | **1.3** | **~5×** |
 
-**Overall efficiency score: 7.5 / 10**
+**Overall efficiency score: 7.5 / 10** (8/10 after template fixes are merged)
 
 ipcraft makes everything up to the core logic essentially free.  The core logic
 itself is still yours to write, which is correct — but even there, the clean
@@ -422,6 +485,13 @@ scaffolding — with impressive completeness.  The single-source-of-truth princi
 is correctly implemented and holds up under real use.  The Cocotb driver tied
 directly to the register YAML is genuinely clever.  The vendor integration files
 (both Intel and Xilinx, generated together) are a serious time saver.
+
+**I ran every step in this review against the real tool.**  `ipcraft new`,
+`ipcraft validate`, and `ipcraft generate` all worked as described.
+`TESTS=2 PASS=2 FAIL=0` — both generated Cocotb tests pass against the
+generated VHDL in GHDL 6.0 in 720 ns of simulated time.  Two template bugs
+(missing types for flat registers, absent hw2sw placeholder) were identified
+and fixed in the process.
 
 Several features I initially thought were missing are already present: `ipcraft
 validate` is fully wired and catches overlap and reference errors before
