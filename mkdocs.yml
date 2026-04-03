@@ -70,3 +70,5 @@ nav:
       - Runtime: api/runtime.md
       - Driver: api/driver.md
   - Contributing: contributing.md
+  - Community:
+      - FPGA Engineer Review: community/fpga-engineer-review.md
