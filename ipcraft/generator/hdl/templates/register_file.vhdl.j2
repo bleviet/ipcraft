@@ -94,9 +94,17 @@ begin
         case v_addr_index is
 {% for reg in registers %}
 {% if reg.access in ['read-write', 'write-only', 'rw', 'wo', 'read_write', 'write_only'] %}
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+          when t_reg_id'pos(REG_{{ reg.name | upper }}_{{ i }}) =>
+            v_wdata := apply_wstrb(to_slv(regs.{{ reg.name | lower }}({{ i }})), wr_data, wr_strb);
+            regs.{{ reg.name | lower }}({{ i }}) <= to_{{ reg.name | lower }}(v_wdata);
+{% endfor %}
+{% else %}
           when t_reg_id'pos(REG_{{ reg.name | upper }}) =>
             v_wdata := apply_wstrb(to_slv(regs.{{ reg.name | lower }}), wr_data, wr_strb);
             regs.{{ reg.name | lower }} <= to_{{ reg.name | lower }}(v_wdata);
+{% endif %}
 {% endif %}
 {% endfor %}
           when others =>
@@ -124,11 +132,25 @@ begin
         case v_addr_index is
 {% for reg in registers %}
 {% if reg.access in ['read-only', 'ro', 'read_only'] %}
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+          when t_reg_id'pos(REG_{{ reg.name | upper }}_{{ i }}) =>
+            rd_data_int <= to_slv(regs_in.{{ reg.name | lower }}({{ i }}));
+{% endfor %}
+{% else %}
           when t_reg_id'pos(REG_{{ reg.name | upper }}) =>
             rd_data_int <= to_slv(regs_in.{{ reg.name | lower }});
+{% endif %}
 {% elif reg.access in ['read-write', 'rw', 'read_write'] %}
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+          when t_reg_id'pos(REG_{{ reg.name | upper }}_{{ i }}) =>
+            rd_data_int <= to_slv(regs.{{ reg.name | lower }}({{ i }}));
+{% endfor %}
+{% else %}
           when t_reg_id'pos(REG_{{ reg.name | upper }}) =>
             rd_data_int <= to_slv(regs.{{ reg.name | lower }});
+{% endif %}
 {% endif %}
 {% endfor %}
           when others =>

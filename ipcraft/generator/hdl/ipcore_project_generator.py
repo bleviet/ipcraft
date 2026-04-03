@@ -154,12 +154,27 @@ class IpCoreProjectGenerator(
             current_offset = base_offset + reg.address_offset
             reg_name = reg.name
 
+            # Check if it's an array
+            is_array = hasattr(reg, 'count') and reg.count > 1
+            count = reg.count if is_array else 1
+            stride = getattr(reg, 'stride', 4) if is_array else 4
+
+            # Use template fields if it is an array, else use reg fields
+            reg_fields = reg.template.fields if is_array and hasattr(reg, 'template') else getattr(reg, 'fields', None)
+            reg_access = reg.template.access if is_array and hasattr(reg, 'template') else getattr(reg, 'access', None)
+            
+            if is_array:
+                # If it's a RegisterArrayDef, offset comes from base_address
+                current_offset = base_offset + getattr(reg, 'base_address', 0)
+            else:
+                current_offset = base_offset + reg.address_offset
+                
             # Leaf register processing
             fields = []
-            if reg.fields:
-                for field in reg.fields:
+            if reg_fields:
+                for field in reg_fields:
                     acc_str = enum_value(field.access)
-                    reg_acc_str = enum_value(reg.access)
+                    reg_acc_str = enum_value(reg_access)
 
                     fields.append(
                         {
@@ -178,15 +193,32 @@ class IpCoreProjectGenerator(
                         }
                     )
 
-            reg_acc_str = enum_value(reg.access)
+            reg_acc_str = enum_value(reg_access)
+
+            # Determine if this register needs a HW→SW path
+            # (read-only or write-1-to-clear fields imply hardware drives the value)
+            _ro_accesses = {"read-only", "ro", "write-1-to-clear", "rw1c", "w1c"}
+            has_hw_driven_fields = any(
+                (enum_value(f.access) or "").lower() in _ro_accesses
+                for f in (reg_fields or [])
+            )
+            reg_acc_lower = (reg_acc_str or "").lower()
+            is_hw2sw = has_hw_driven_fields or reg_acc_lower in {"read-only", "ro"}
 
             registers.append(
                 {
                     "name": prefix + reg_name,
                     "offset": current_offset,
-                    "access": reg_acc_str.lower(),
+                    "access": reg_acc_lower,
                     "description": reg.description or "",
                     "fields": fields,
+                    "is_array": is_array,
+                    "count": count,
+                    "stride": stride,
+                    "reset_value": (
+                        getattr(reg, "reset_value", None) or 0
+                    ),
+                    "hw2sw": is_hw2sw,
                 }
             )
 

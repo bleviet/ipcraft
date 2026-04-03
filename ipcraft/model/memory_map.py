@@ -356,7 +356,7 @@ class AddressBlock(FlexibleModel):
     default_reg_width: int = Field(default=32, description="Default register width")
 
     # Content
-    registers: List[RegisterDef] = Field(
+    registers: List[Union[RegisterDef, RegisterArrayDef]] = Field(
         default_factory=list, description="Registers in block"
     )
 

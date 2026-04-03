@@ -63,6 +63,9 @@ class File(StrictModel):
     logical_name: str = Field(
         default="", description="Logical name (e.g., library name for VHDL)"
     )
+    managed: bool = Field(
+        default=True, description="Whether the file should be overwritten on generation"
+    )
 
     @field_validator("path")
     @classmethod

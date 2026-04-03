@@ -46,7 +46,12 @@ class FileSetManagerMixin:
                 "name": fs.name,
                 "description": fs.description,
                 "files": [
-                    {"path": file.path, "type": file.type.value} for file in fs.files
+                    {
+                        "path": file.path,
+                        "type": file.type.value,
+                        **({"managed": file.managed} if not file.managed else {})
+                    }
+                    for file in fs.files
                 ],
             }
             for fs in expected_filesets
@@ -73,7 +78,7 @@ class FileSetManagerMixin:
         rtl_files = [File(path=f"rtl/{name}_pkg.vhd", type=FileType.VHDL)]
         if include_regs:
             rtl_files.append(File(path=f"rtl/{name}_regs.vhd", type=FileType.VHDL))
-        rtl_files.append(File(path=f"rtl/{name}_core.vhd", type=FileType.VHDL))
+        rtl_files.append(File(path=f"rtl/{name}_core.vhd", type=FileType.VHDL, managed=False))
 
         if f"rtl/{name}_axil.vhd" in generated_files:
             rtl_files.append(File(path=f"rtl/{name}_axil.vhd", type=FileType.VHDL))
@@ -148,8 +153,8 @@ class FileSetManagerMixin:
             if len(exist_fs.files) != len(exp_fs.files):
                 return False
 
-            exist_files = {(f.path, f.type) for f in exist_fs.files}
-            exp_files = {(f.path, f.type) for f in exp_fs.files}
+            exist_files = {(f.path, f.type, getattr(f, 'managed', True)) for f in exist_fs.files}
+            exp_files = {(f.path, f.type, getattr(f, 'managed', True)) for f in exp_fs.files}
             if exist_files != exp_files:
                 return False
 

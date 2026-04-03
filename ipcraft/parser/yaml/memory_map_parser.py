@@ -7,7 +7,7 @@ import yaml
 from pydantic import ValidationError
 
 from ipcraft.model import AddressBlock, MemoryMap
-from ipcraft.model.memory_map import BitFieldDef, RegisterDef
+from ipcraft.model.memory_map import BitFieldDef, RegisterDef, RegisterArrayDef
 from ipcraft.utils import parse_bit_range, filter_none
 
 from .errors import ParseError
@@ -173,7 +173,7 @@ class MemoryMapParserMixin(ParserHostContext):
 
     def _parse_registers(
         self, data: List[Dict[str, Any]], file_path: Path
-    ) -> List[RegisterDef]:
+    ) -> List[Union[RegisterDef, RegisterArrayDef]]:
         """Parse register definitions and expand array/template constructs."""
         registers = []
         current_offset = 0
@@ -185,13 +185,30 @@ class MemoryMapParserMixin(ParserHostContext):
                     continue
 
                 if "registers" in reg_data and "count" in reg_data:
-                    expanded_regs = self._expand_nested_register_array(
-                        reg_data, current_offset, file_path
+                    # Construct RegisterArrayDef
+                    count = reg_data.get("count", 1)
+                    stride = reg_data.get("stride", 4)
+                    
+                    sub_regs = self._parse_registers(reg_data["registers"], file_path)
+                    if not sub_regs:
+                        raise ParseError(f"Register array '{reg_data.get('name')}' has no sub-registers", file_path)
+                        
+                    # Usually arrays have a single template register
+                    template = sub_regs[0]
+                    
+                    # Update current_offset before appending
+                    address_offset = reg_data.get("addressOffset") or reg_data.get("offset", current_offset)
+                    
+                    array_def = RegisterArrayDef(
+                        name=reg_data.get("name", "REG"),
+                        base_address=address_offset,
+                        count=count,
+                        stride=stride,
+                        template=template,
+                        description=reg_data.get("description", ""),
                     )
-                    registers.extend(expanded_regs)
-                    if expanded_regs:
-                        last_reg = expanded_regs[-1]
-                        current_offset = last_reg.address_offset + (last_reg.size // 8)
+                    registers.append(array_def)
+                    current_offset = address_offset + (count * stride)
                     continue
 
                 if "generateArray" in reg_data:

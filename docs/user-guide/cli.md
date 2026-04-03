@@ -1,6 +1,6 @@
 # CLI Reference
 
-IPCraft provides four commands: `new`, `generate`, `parse`, and `list-buses`.
+IPCraft provides five commands: `new`, `generate`, `parse`, `list-buses`, and `validate`.
 
 ```bash
 ipcraft <command> [options]
@@ -225,3 +225,34 @@ integration (e.g., VS Code extension). When enabled:
 - Output is formatted as JSON objects
 - Progress messages use structured format
 - Errors include machine-readable context
+
+---
+
+## `validate` -- Validate IP Core YAML
+
+Validates the structural and semantic correctness of an IP core YAML file and any referenced memory maps.
+
+```bash
+ipcraft validate <input.yml> [options]
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--json` | Off | Output in JSON format (for VS Code integration) |
+
+### Validation Checks
+
+- Address alignment.
+- Memory map overlap.
+- Missing register references.
+- Valid bus interface references.
+
+### Examples
+
+```bash
+# Validate my_core.ip.yml
+ipcraft validate my_core.ip.yml
+```
+

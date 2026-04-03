@@ -48,6 +48,47 @@ def log(msg: str, use_progress: bool, use_json: bool):
         print(msg)
 
 
+def cmd_validate(args):
+    """Validate IP core YAML."""
+    from ipcraft.parser.yaml.ip_yaml_parser import YamlIpCoreParser
+    from ipcraft.model.validators import IpCoreValidator
+
+    try:
+        ip_core = YamlIpCoreParser().parse_file(args.input)
+        validator = IpCoreValidator(ip_core)
+        is_valid = validator.validate_all()
+
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "success": True,
+                        "valid": is_valid,
+                        "errors": validator.errors,
+                    }
+                )
+            )
+            if not is_valid:
+                sys.exit(1)
+        else:
+            if is_valid:
+                print(f"✓ {args.input} is valid")
+            else:
+                print(f"✗ {args.input} is invalid:")
+                for error in validator.errors:
+                    print(f"  - {error}")
+                sys.exit(1)
+
+    except Exception as e:
+        if args.json:
+            print(json.dumps({"success": False, "error": str(e)}))
+        else:
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
 def cmd_new(args):
     """Generate a new IP core YAML from templates."""
     import os
@@ -119,8 +160,24 @@ def cmd_generate(args):
 
         log(f"Writing {len(all_files)} files...", args.progress, args.json)
         written = {}
+        
+        # Build a lookup of unmanaged files
+        unmanaged_files = set()
+        if ip_core.file_sets:
+            for fileset in ip_core.file_sets:
+                for f in fileset.files:
+                    if not getattr(f, "managed", True):
+                        # Use the file name or relative path to match
+                        unmanaged_files.add(Path(f.path).name)
+
         for filepath, content in all_files.items():
             full_path = output_base / filepath
+            
+            # Check if we should skip this file
+            if full_path.exists() and Path(filepath).name in unmanaged_files:
+                log(f"  Skipped (unmanaged): {filepath}", args.progress, args.json)
+                continue
+                
             full_path.parent.mkdir(parents=True, exist_ok=True)
             full_path.write_text(content)
             written[filepath] = str(full_path)
@@ -313,6 +370,16 @@ def main():
         prog="ipcraft", description="IP Core scaffolding and generation tool"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # validate subcommand
+    val_parser = subparsers.add_parser(
+        "validate", help="Validate IP core YAML"
+    )
+    val_parser.add_argument("input", help="IP core YAML file")
+    val_parser.add_argument(
+        "--json", action="store_true", help="JSON output (for VS Code integration)"
+    )
+    val_parser.set_defaults(func=cmd_validate)
 
     # new subcommand
     new_parser = subparsers.add_parser("new", help="Create a new IP core from template")
