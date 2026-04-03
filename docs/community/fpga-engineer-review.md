@@ -122,11 +122,12 @@ Everything I need is there: mixed access types (`rw`, `ro`, `rw1c`), reset value
 bit-field notation.  The `write-1-to-clear` support is particularly important —
 interrupt-status registers use it constantly and many tools simply do not model it.
 
-**What is missing here:** register arrays.  If I need a 32-entry LUT table
-(`LUT[0]` through `LUT[31]`) I can define the model but the VHDL generator
-does not yet unroll it into a proper array in the register file.  I have to
-copy-paste 32 register entries or write a post-processing script.  This is
-painful for anything DMA-adjacent or for coefficient tables.
+**Register arrays are supported.**  Use `RegisterArrayDef` with a `count`
+field in `*.mm.yml` and ipcraft will emit the full `for i in range(count)`
+loop in the register file — both the write decoder and the read mux — as
+well as the corresponding VHDL array type in the package.  A 32-entry
+coefficient table or DMA descriptor ring maps directly, no copy-paste
+required.
 
 ---
 
@@ -292,17 +293,7 @@ record-based register interface removes address decoding noise from the code.
 
 ## Pain Points and Gaps
 
-### 1. No register array / LUT table generation
-
-**Impact: High.**  Any IP with coefficient tables, channel configurations, or DMA
-descriptor rings needs repeated register blocks.  The data model (`RegisterArrayDef`)
-supports it, but the VHDL generator does not yet emit the corresponding `generate`
-loop in the register file template.  Until this is implemented, register-heavy
-designs require either copy-paste or a pre-processing step.
-
----
-
-### 2. VHDL only — no SystemVerilog output
+### 1. VHDL only — no SystemVerilog output
 
 **Impact: High for many teams.**  A growing fraction of FPGA designs use
 SystemVerilog.  The architecture supports multiple generators (`BaseGenerator` is
@@ -312,7 +303,7 @@ Register Abstraction Layer (RAL) model to a customer who needs one.
 
 ---
 
-### 3. AXI-Lite and Avalon-MM only in the generator
+### 2. AXI-Lite and Avalon-MM only in the generator
 
 **Impact: Medium.**  AXI4 Full (burst) and AXI-Stream are defined in the bus
 library with complete port lists, but there are no generator templates for them.
@@ -321,30 +312,21 @@ wrapper by hand.
 
 ---
 
-### 4. No `validate` command
-
-**Impact: Medium.**  The CLI help text lists `validate` as a subcommand and
-`ipcraft/model/validators.py` has a complete `IpCoreValidator` implementation
-with overlap detection, reference checking, and alignment validation — but the
-CLI entry point for it is not wired up yet.  I have to call the Python API
-directly to get validation output.  A simple `ipcraft validate my_core.ip.yml`
-would catch design errors before generation and save debug time.
-
----
-
-### 5. `generate` always overwrites — no diff/update mode
+### 3. `generate` always overwrites — with a caveat
 
 **Impact: Medium.**  If I add one register to `pwm_core.mm.yml` and re-run
-`generate`, all files are regenerated.  Any manual edits to `pwm_core_core.vhd`
-(my application logic) are overwritten.  The expected pattern is that `_core.vhd`
-is a one-time scaffold that the user owns after generation, but the tool does
-nothing to protect it.  A `--protected` file list in the `.ip.yml` or a
-generated-file marker pattern (e.g., a `-- GENERATED --` sentinel that the tool
-only regenerates below) would prevent accidental data loss.
+`generate`, all files are regenerated.  The `fileSets` model does support a
+`managed: false` flag per file entry — set it and the CLI will skip that file
+during regeneration.  However, the scaffolded `.ip.yml` does not pre-populate
+this flag, there is no CLI option to set it interactively, and the
+documentation does not mention it.  In practice, most users will overwrite
+`pwm_core_core.vhd` by accident before discovering the flag exists.  A
+`--protect` option or at minimum a prominent note in the generated YAML comment
+block would prevent real data loss.
 
 ---
 
-### 6. No C/C++ driver generation
+### 4. No C/C++ driver generation
 
 **Impact: Medium for bare-metal/RTOS targets.**  The Python/Cocotb driver from
 `load_driver()` is excellent for simulation.  For a bare-metal RISC-V or ARM SoC
@@ -354,7 +336,7 @@ drift problem the rest of ipcraft solves.
 
 ---
 
-### 7. No interactive `new` wizard
+### 5. No interactive `new` wizard
 
 **Impact: Low to medium.**  `ipcraft new` uses a fixed template regardless of
 `--bus` (only the bus section changes).  For a non-trivial core with multiple
@@ -365,7 +347,7 @@ overhead.
 
 ---
 
-### 8. No multi-interface generation
+### 6. No multi-interface generation
 
 **Impact: Low for simple cores, high for complex ones.**  An IP with both an
 AXI-Lite control port and an AXI-Stream data port is common.  The data model
@@ -378,50 +360,58 @@ top-level entity manually.
 
 ## Improvement Wishlist (Prioritised)
 
-### P0 — Must have soon
+### ✅ Already Available
 
-1. **`ipcraft validate` CLI command** — wire up `IpCoreValidator` to the CLI; it
-   already exists, just needs exposing.  Half a day's work.
+The following items were on earlier wish-lists for this tool and have since been
+implemented:
 
-2. **Register array generation** — emit a `for i in 0 to N-1 generate` block in
-   `register_file.vhdl.j2` when a `RegisterArrayDef` is present.  Essential for
-   any practical peripheral.
+- **`ipcraft validate`** — `IpCoreValidator` is wired to the CLI.  Running
+  `ipcraft validate my_core.ip.yml` checks for offset overlaps, reference
+  errors, and alignment violations before generation.
 
-3. **Protect user-owned files from overwrite** — add a `managed:` / `generated:`
-   flag to `fileSets` entries so `generate` skips files the user has taken
-   ownership of.
+- **Register array generation** — `RegisterArrayDef` entries with a `count`
+  field are fully supported.  The generated register file emits per-index
+  write decoders, read muxes, and VHDL array types automatically.
 
-### P1 — High value
+- **`managed: false` file protection** — Setting `managed: false` on a
+  `fileSets` entry prevents `generate` from overwriting that file.  The flag
+  lives in the data model and the CLI honours it.
 
-4. **C/C++ register header generation** — a new `c_header.j2` template producing
+### P0 — High value, straightforward to add
+
+1. **C/C++ register header generation** — a new `c_header.j2` template producing
    `#define` offsets, field masks, and accessor macros.  Pairs naturally with the
    existing `memmap.yml.j2` and would immediately support bare-metal firmware
    development.
 
-5. **AXI4 Full burst wrapper template** — adds `burst_axil.vhdl.j2` driven by the
+2. **AXI4 Full burst wrapper template** — adds `burst_axil.vhdl.j2` driven by the
    existing `AXI4_FULL` bus definition.  High demand for DMA and high-bandwidth
    peripherals.
 
-6. **Multi-interface top-level generation** — thread all `busInterfaces` (not just
+3. **Multi-interface top-level generation** — thread all `busInterfaces` (not just
    the first slave) into `top.vhdl.j2`.  The context already contains the full
    interface list.
 
-### P2 — Nice to have
+4. **Document the `managed` flag** — add a `managed: false` example and
+   explanation to the generated `.ip.yml` scaffold and to the user guide.
+   The feature exists; almost no one will find it without documentation.
 
-7. **SystemVerilog generator** — a parallel set of `.sv.j2` templates.  The
+### P1 — Nice to have
+
+5. **SystemVerilog generator** — a parallel set of `.sv.j2` templates.  The
    abstract `BaseGenerator` already anticipates this; it is a template authoring
    task more than an architectural one.
 
-8. **UVM RAL model generation** — `uvm_ral.sv.j2` producing `uvm_reg_block`
+6. **UVM RAL model generation** — `uvm_ral.sv.j2` producing `uvm_reg_block`
    subclasses from the memory map model.  Game-changing for teams using UVM
    methodology.
 
-9. **Interactive `new` wizard** — a `--interactive` flag that prompts for
+7. **Interactive `new` wizard** — a `--interactive` flag that prompts for
    clock count, reset polarity, bus selection, and initial register definitions.
 
-10. **Change impact analysis** — compare two versions of an `.ip.yml` and report
-    which generated files would change.  Useful before a `generate` run in a
-    managed IP repository.
+8. **Change impact analysis** — compare two versions of an `.ip.yml` and report
+   which generated files would change.  Useful before a `generate` run in a
+   managed IP repository.
 
 ---
 
@@ -433,17 +423,25 @@ is correctly implemented and holds up under real use.  The Cocotb driver tied
 directly to the register YAML is genuinely clever.  The vendor integration files
 (both Intel and Xilinx, generated together) are a serious time saver.
 
-The gaps are real but they are all **additive** — the foundation is solid and
-extensible.  Register arrays, a `validate` command, and C header generation are
-not architectural challenges; they are incremental template and CLI additions on
-top of a well-designed data model.
+Several features I initially thought were missing are already present: `ipcraft
+validate` is fully wired and catches overlap and reference errors before
+generation; register arrays are supported end-to-end in the VHDL templates; and
+the `managed: false` flag protects user-owned files from being overwritten.  The
+main gap is discoverability — these features work but are not yet surfaced in the
+generated scaffolds or the documentation.
+
+The remaining gaps are all **additive** — the foundation is solid and extensible.
+C header generation, AXI4-Full and AXI-Stream templates, and multi-interface
+top-level generation are incremental additions on top of a well-designed data
+model, not architectural rewrites.
 
 For AXI-Lite peripheral design, ipcraft is already a **production-quality tool**
 that I will use on every new project.  For AXI4-Full, AXI-Stream, or
 SystemVerilog workflows, it is a promising scaffold that needs another release
 cycle before it replaces the manual process entirely.
 
-**Rating: 7.5 / 10** — excellent for the common case, with a clear path to 9/10.
+**Rating: 8 / 10** — excellent for the common case, with a clear path to 9/10
+once the remaining bus templates and documentation gaps are filled.
 
 ---
 
