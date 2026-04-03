@@ -71,6 +71,7 @@ class FileSetParserMixin:
                 except ValueError:
                     file_type = FileType(file_type_str.upper())
 
+                managed = file_data.get("managed", True)
                 files.append(
                     File(
                         **filter_none(
@@ -78,8 +79,11 @@ class FileSetParserMixin:
                                 "path": file_data.get("path"),
                                 "type": file_type,
                                 "description": file_data.get("description"),
+                                "is_include_file": file_data.get("is_include_file") or None,
+                                "logical_name": file_data.get("logical_name") or None,
                             }
-                        )
+                        ),
+                        managed=managed,
                     )
                 )
             except (KeyError, TypeError, ValueError, ValidationError) as e:

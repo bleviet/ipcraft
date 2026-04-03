@@ -438,7 +438,8 @@ implemented:
 
 - **`managed: false` file protection** — Setting `managed: false` on a
   `fileSets` entry prevents `generate` from overwriting that file.  The flag
-  lives in the data model and the CLI honours it.
+  lives in the data model and the CLI honours it.  **Verified end-to-end** —
+  see the [Managed Flag Verification](#managed-flag-verification) section below.
 
 ### P0 — High value, straightforward to add
 
@@ -477,6 +478,94 @@ implemented:
 8. **Change impact analysis** — compare two versions of an `.ip.yml` and report
    which generated files would change.  Useful before a `generate` run in a
    managed IP repository.
+
+---
+
+## Managed Flag Verification
+
+Every behaviour described above was verified with a live `managed_test` IP core
+using GHDL 6.0.0-dev and ipcraft from source.  A bug was discovered and fixed
+during this process (see note below).
+
+### Test setup
+
+```bash
+ipcraft new managed_test --vendor test.com --library test \
+    --version 1.0.0 --bus AXI4L --output /tmp/managed_test/managed_test
+ipcraft generate managed_test.ip.yml --output /tmp/managed_test/out \
+    --vendor both --testbench --regs
+```
+
+After the first `generate`, the ip.yml contains:
+
+```yaml
+fileSets:
+  - name: RTL_Sources
+    files:
+      - path: rtl/managed_test_pkg.vhd
+        type: vhdl
+      - path: rtl/managed_test_core.vhd
+        type: vhdl
+        managed: false          # auto-set by ipcraft generate
+      - path: rtl/managed_test_axil.vhd
+        type: vhdl
+      ...
+```
+
+### Test 1 — Auto-protection of `_core.vhd`
+
+Append `-- SENTINEL_UNMANAGED` to `managed_test_core.vhd` and
+`-- SENTINEL_MANAGED` to `managed_test_pkg.vhd`, then re-run generate:
+
+```
+  Written: rtl/managed_test_pkg.vhd
+  Written: rtl/managed_test.vhd
+  Skipped (unmanaged): rtl/managed_test_core.vhd   ← protected
+  Written: rtl/managed_test_axil.vhd
+  ...
+```
+
+**Result:** `_core.vhd` sentinel preserved; `_pkg.vhd` sentinel erased. ✅
+
+### Test 2 — Manual `managed: false` on any file
+
+Add `managed: false` to the `_axil.vhd` entry, append a sentinel, re-run:
+
+```
+  Written: rtl/managed_test_pkg.vhd
+  Written: rtl/managed_test.vhd
+  Skipped (unmanaged): rtl/managed_test_core.vhd
+  Skipped (unmanaged): rtl/managed_test_axil.vhd   ← also protected
+  ...
+```
+
+**Result:** Both `managed: false` files preserved. ✅
+
+### Test 3 — Absent unmanaged file is created on first run
+
+Delete `managed_test_core.vhd` and re-run generate:
+
+```
+  Written: rtl/managed_test_core.vhd   ← created because it did not exist
+  Skipped (unmanaged): rtl/managed_test_axil.vhd
+  ...
+```
+
+**Result:** Absent `managed: false` files are created, not silently skipped. ✅
+
+### Bug found and fixed
+
+During testing the protection did **not** work on the first attempt.
+Investigation showed that `fileset_parser.py → _parse_files()` only read
+`path`, `type`, and `description` from each YAML file entry — the `managed` key
+was silently ignored.  Every file was therefore parsed with the default
+`managed=True`, so all files were overwritten.
+
+**Fix:** `_parse_files()` now also reads `managed`, `is_include_file`, and
+`logical_name` from the YAML entry.  The fix is a two-line addition to
+`ipcraft/parser/yaml/fileset_parser.py`.
+
+All 142 existing tests continue to pass after the fix.
 
 ---
 
