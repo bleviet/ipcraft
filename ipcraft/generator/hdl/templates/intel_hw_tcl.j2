@@ -57,13 +57,13 @@ add_interface_port reset rst reset Input 1
 # Bus Interfaces (Generic)
 # -----------------------------------------------------------------------------
 {% for iface in expanded_bus_interfaces %}
-{% if iface.type == 'AXI4L' %}
+{% if 'axi4_lite' in iface.type | lower or iface.type == 'AXI4L' %}
 {% set intel_type = 'axi4lite' %}
-{% elif iface.type == 'AVALON_MM' %}
+{% elif 'avalon_mm' in iface.type | lower or iface.type == 'AVALON_MM' %}
 {% set intel_type = 'avalon' %}
-{% elif iface.type == 'AXIS' %}
+{% elif 'axis' in iface.type | lower or 'axi4_stream' in iface.type | lower or iface.type == 'AXIS' %}
 {% set intel_type = 'axi4stream' %}
-{% elif iface.type == 'AVALON_ST' %}
+{% elif 'avalon_st' in iface.type | lower or iface.type == 'AVALON_ST' %}
 {% set intel_type = 'avalon_streaming' %}
 {% else %}
 {% set intel_type = 'unknown' %}
