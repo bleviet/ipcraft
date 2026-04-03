@@ -16,6 +16,15 @@ for core in axi4_lite axi4_full axi_stream avalon_mm avalon_st; do
     echo " TESTING $core with Quartus"
     echo "========================================="
     docker run --rm -v $(pwd):/build raetro/quartus:23.1 /bin/bash -c "cd /build/tests/toolchain && make test-quartus IP_DIR=../supported_buses/${core} TOP_ENTITY=${core}"
+
+    if command -v vivado &> /dev/null; then
+        echo "========================================="
+        echo " TESTING $core with Vivado"
+        echo "========================================="
+        (cd tests/toolchain && make test-vivado IP_DIR=../supported_buses/${core} TOP_ENTITY=${core})
+    else
+        echo "Skipping Vivado tests: 'vivado' command not found."
+    fi
 done
 
 echo "ALL TESTS COMPLETED SUCCESSFULLY"

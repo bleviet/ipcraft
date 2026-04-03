@@ -37,6 +37,11 @@ if { [file exists $xml_file] } {
     puts "Warning: No xilinx/component.xml found."
 }
 
+# Suppress expected warnings about unconnected inputs and tied-off outputs since the core logic is a blank templated stub
+set_msg_config -id {Synth 8-7129} -new_severity info
+set_msg_config -id {Synth 8-7080} -new_severity info
+set_msg_config -id {Synth 8-3917} -new_severity info
+
 # Run Out-Of-Context synthesis to verify elaboration and syntax
 puts "Running Out-Of-Context synthesis..."
 catch { synth_design -top $top_entity -mode out_of_context } result

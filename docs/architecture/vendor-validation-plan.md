@@ -25,7 +25,19 @@ To guarantee that generated IP works seamlessly, we will integrate Headless/Batc
   ipxact::load_core xilinx/component.xml
   synth_design -top <target_entity> -mode out_of_context
   ```
-- **Success Criteria:** Zero synthesis/elaboration errors.
+- **Execution Workflow:** 
+  Run validation locally using your host Vivado installation (ensure `vivado` is in your `PATH`):
+  ```bash
+  source ~/tools/Xilinx/Vivado/2024.2/settings64.sh  # Or your equivalent install path
+  cd tests/toolchain
+  make test-vivado IP_DIR=../supported_buses/axi4_lite TOP_ENTITY=axi4_lite
+  ```
+- **Success Criteria:** Zero synthesis/elaboration errors. Active automated tests confirm 100% success loading the `component.xml` and running OOC synthesis mapped natively in Vivado 2024.2 across all 5 test topologies:
+  - **AXI4-Lite**
+  - **AXI4-Full**
+  - **AXI-Stream**
+  - **Avalon-MM**
+  - **Avalon-ST**
 
 ### Intel Quartus / Platform Designer Validation
 - **Action:** Validate `_hw.tcl` properties and run Quartus Analysis & Elaboration.
