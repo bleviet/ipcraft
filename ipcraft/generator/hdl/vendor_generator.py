@@ -41,6 +41,17 @@ class VendorGenerationMixin:
         context = self._get_template_context(ip_core, "axil")
         return template.render(**context)
 
+    def generate_xilinx_package_ip_tcl(self: GeneratorHost, ip_core: IpCore) -> str:
+        """Generate Xilinx Vivado IP packaging automation script."""
+        template = self.env.get_template("xilinx_package_ip_tcl.j2")
+        context = self._get_template_context(ip_core, "axil")
+        context["vendor"] = ip_core.vlnv.vendor
+        context["library"] = ip_core.vlnv.library
+        context["version"] = ip_core.vlnv.version
+        context["description"] = ip_core.description
+        context["display_name"] = ip_core.vlnv.name.replace("_", " ").title()
+        return template.render(**context)
+
     def generate_vendor_files(
         self, ip_core: IpCore, vendor: str = "both", bus_type: str = "axil"
     ) -> Dict[str, str]:
@@ -53,6 +64,7 @@ class VendorGenerationMixin:
 
         if vendor in ["xilinx", "both"]:
             files["component.xml"] = self.generate_xilinx_component_xml(ip_core)
+            files["package_ip.tcl"] = self.generate_xilinx_package_ip_tcl(ip_core)
             version_str = ip_core.vlnv.version.replace(".", "_")
             files[f"xilinx/xgui/{name}_v{version_str}.tcl"] = self.generate_xilinx_xgui(
                 ip_core

@@ -577,6 +577,7 @@ class IpCoreProjectGenerator(
 
         if vendor in ["xilinx", "both"]:
             files["xilinx/component.xml"] = self.generate_xilinx_component_xml(ip_core)
+            files["xilinx/package_ip.tcl"] = self.generate_xilinx_package_ip_tcl(ip_core)
             # Generate XGUI file with version in filename
             version_str = ip_core.vlnv.version.replace(".", "_")
             files[f"xilinx/xgui/{name}_v{version_str}.tcl"] = self.generate_xilinx_xgui(

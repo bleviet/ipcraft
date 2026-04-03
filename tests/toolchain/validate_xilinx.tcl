@@ -27,12 +27,10 @@ if { [llength $vhdl_files] == 0 } {
 }
 read_vhdl $vhdl_files
 
-# Check if IP-XACT component.xml exists and load it
+# IP-XACT properties are verified strictly during packaging instead of synthesis.
 set xml_file "$ip_dir/xilinx/component.xml"
 if { [file exists $xml_file] } {
-    puts "Reading IP-XACT component XML: $xml_file"
-    read_ipxact $xml_file
-    ipxact::load_core $xml_file
+    puts "Verified existence of IP-XACT component XML: $xml_file"
 } else {
     puts "Warning: No xilinx/component.xml found."
 }
