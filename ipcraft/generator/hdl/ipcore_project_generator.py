@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import warnings
 
+from ipcraft.model.memory_map import AccessType
+
 
 from ipcraft.generator.base_generator import BaseGenerator
 from ipcraft.generator.hdl.fileset_manager import FileSetManagerMixin
@@ -196,17 +198,30 @@ class IpCoreProjectGenerator(
 
             # Determine if this register needs a HW→SW path
             # (read-only or write-1-to-clear fields imply hardware drives the value)
-            _ro_accesses = {"read-only", "ro", "write-1-to-clear", "rw1c", "w1c"}
+            def _is_hw_driven(access_str: str) -> bool:
+                try:
+                    access = AccessType.normalize((access_str or "").lower())
+                    return access in {AccessType.READ_ONLY, AccessType.WRITE_1_TO_CLEAR, AccessType.READ_WRITE_1_TO_CLEAR}
+                except ValueError:
+                    return False
+
             has_hw_driven_fields = any(
-                (enum_value(f.access) or "").lower() in _ro_accesses
+                _is_hw_driven(enum_value(f.access))
                 for f in (reg_fields or [])
             )
             reg_acc_lower = (reg_acc_str or "").lower()
-            is_hw2sw = has_hw_driven_fields or reg_acc_lower in {"read-only", "ro"}
+            is_hw2sw = has_hw_driven_fields or _is_hw_driven(reg_acc_lower)
 
             # Gather W1C fields for the register
-            w1c_fields = [f for f in fields if f["access"] in {"write-1-to-clear", "read-write-1-to-clear", "rw1c", "w1c"}]
-            if not reg_fields and reg_acc_lower in {"write-1-to-clear", "read-write-1-to-clear", "rw1c", "w1c"}:
+            def _is_w1c(access_str: str) -> bool:
+                try:
+                    access = AccessType.normalize((access_str or "").lower())
+                    return access in {AccessType.WRITE_1_TO_CLEAR, AccessType.READ_WRITE_1_TO_CLEAR}
+                except ValueError:
+                    return False
+
+            w1c_fields = [f for f in fields if _is_w1c(f["access"])]
+            if not reg_fields and _is_w1c(reg_acc_lower):
                 w1c_fields = [{"name": "data", "offset": 0, "width": 32, "access": reg_acc_lower}]
 
             registers.append(
@@ -354,11 +369,22 @@ class IpCoreProjectGenerator(
         """Build common template context."""
         registers = self._prepare_registers(ip_core)
 
-        sw_access = ["read-write", "write-only", "rw", "wo"]
-        hw_access = ["read-only", "ro"]
+        def _is_sw_driven(acc: str) -> bool:
+            try:
+                access = AccessType.normalize(acc)
+                return access in {AccessType.READ_WRITE, AccessType.WRITE_ONLY, AccessType.READ_WRITE_1_TO_CLEAR, AccessType.WRITE_1_TO_CLEAR}
+            except ValueError:
+                return True
 
-        sw_registers = [r for r in registers if r["access"] in sw_access]
-        hw_registers = [r for r in registers if r["access"] in hw_access]
+        def _is_hw_only(acc: str) -> bool:
+            try:
+                access = AccessType.normalize(acc)
+                return access in {AccessType.READ_ONLY}
+            except ValueError:
+                return False
+
+        sw_registers = [r for r in registers if _is_sw_driven(r["access"])]
+        hw_registers = [r for r in registers if _is_hw_only(r["access"])]
 
         # Extract clock and reset information
         clock_port = ip_core.clocks[0].name if ip_core.clocks else "clk"
@@ -408,6 +434,9 @@ class IpCoreProjectGenerator(
                     # Secondary bus ports (for core entity)
                     secondary_bus_ports.extend(active_ports)
 
+        max_addr = max((r["offset"] + r.get("stride", 4) * r.get("count", 1)) for r in registers) if registers else 16
+        calc_addr_width = max(max_addr.bit_length(), 4)
+
         return {
             "entity_name": ip_core.vlnv.name.lower(),
             "registers": registers,
@@ -421,7 +450,7 @@ class IpCoreProjectGenerator(
             "expanded_bus_interfaces": expanded_bus_interfaces,
             "bus_prefix": bus_prefix if ip_core.bus_interfaces else "s_axi",
             "data_width": 32,
-            "addr_width": 8,
+            "addr_width": calc_addr_width,
             "reg_width": 4,
             "memory_maps": ip_core.memory_maps,
             "clock_port": clock_port,

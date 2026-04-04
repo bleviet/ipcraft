@@ -727,7 +727,7 @@ below.
 
 ### Important Improvements
 
-#### IMP-1: Mixed access-type string comparisons in the generator
+#### ~~IMP-1: Mixed access-type string comparisons in the generator~~ ✅ **Done**
 
 **File:** `ipcraft/generator/hdl/ipcore_project_generator.py` (line ~200)
 
@@ -749,7 +749,7 @@ is_hw_driven = access in {AccessType.READ_ONLY, AccessType.WRITE_1_TO_CLEAR}
 
 ---
 
-#### IMP-2: Address width is hard-coded to 8
+#### ~~IMP-2: Address width is hard-coded to 8~~ ✅ **Done**
 
 **File:** `ipcraft/generator/hdl/ipcore_project_generator.py` (line ~419)
 
@@ -769,7 +769,7 @@ Users with larger register maps will get incorrect decode logic.
 
 ---
 
-#### IMP-3: Missing `WSTRB` default when port is absent
+#### ~~IMP-3: Missing `WSTRB` default when port is absent~~ ✅ **Done**
 
 **Files:** `bus_axil.vhdl.j2`, `register_file.vhdl.j2`
 
@@ -785,7 +785,7 @@ hard-wire it inside the register file.
 
 ---
 
-#### IMP-4: pyparsing deprecation warnings
+#### ~~IMP-4: pyparsing deprecation warnings~~ ✅ **Done**
 
 **File:** `ipcraft/parser/hdl/vhdl_parser.py` (lines 72, 79, 86)
 
@@ -795,7 +795,7 @@ compatibility with pyparsing >= 3.2.
 
 ---
 
-#### IMP-5: 37 skipped tests uninvestigated
+#### ~~IMP-5: 37 skipped tests uninvestigated~~ ✅ **Done**
 
 The test suite reports `142 passed, 37 skipped`.  Skipped tests may mask
 regressions.  Each skipped test should either have a documented reason (missing
@@ -1026,7 +1026,7 @@ Then use `awvalid_i`, `wvalid_i`, etc. throughout the process bodies.
 
 ---
 
-### TASK-04 -- Auto-calculate `C_ADDR_WIDTH`
+### ~~TASK-04 -- Auto-calculate `C_ADDR_WIDTH`~~ ✅ **Done**
 
 **Priority:** Important
 **File:** `ipcraft/generator/hdl/ipcore_project_generator.py`
@@ -1056,7 +1056,7 @@ Update `C_ADDR_WIDTH` in `package.vhdl.j2` to use this value.  Also update
 
 ---
 
-### TASK-05 -- Normalise access-type comparisons in generator
+### ~~TASK-05 -- Normalise access-type comparisons in generator~~ ✅ **Done**
 
 **Priority:** Important
 **File:** `ipcraft/generator/hdl/ipcore_project_generator.py`
@@ -1204,7 +1204,7 @@ Wire into `generate_all_with_structure()` alongside the testbench.
 
 ---
 
-### TASK-08 -- Migrate pyparsing deprecated APIs
+### ~~TASK-08 -- Migrate pyparsing deprecated APIs~~ ✅ **Done**
 
 **Priority:** Important
 **File:** `ipcraft/parser/hdl/vhdl_parser.py`
@@ -1225,7 +1225,7 @@ These are drop-in replacements.  Update imports and call sites at lines 72, 79,
 
 ---
 
-### TASK-09 -- Investigate and document skipped tests
+### ~~TASK-09 -- Investigate and document skipped tests~~ ✅ **Done**
 
 **Priority:** Important
 **File:** Various test files

@@ -23,8 +23,8 @@ from pyparsing import (
     ZeroOrMore,
     alphanums,
     alphas,
-    nestedExpr,
-    oneOf,
+    nested_expr,
+    one_of,
     original_text_for,
     restOfLine,
 )
@@ -69,21 +69,21 @@ class VHDLParser:
 
         # Basic building blocks
         self.identifier = Word(alphas + "_", alphanums + "_")
-        self.direction = oneOf("in out inout buffer linkage", caseless=True)
+        self.direction = one_of("in out inout buffer linkage", caseless=True)
 
         # Enhanced type handling
         self.simple_type_name = Word(alphas + "_", alphanums + "_.")
 
-        # Use nestedExpr to correctly handle ranges with parentheses, including nested ones
+        # Use nested_expr to correctly handle ranges with parentheses, including nested ones
         self.range_type = Combine(
-            self.simple_type_name + original_text_for(nestedExpr())
+            self.simple_type_name + original_text_for(nested_expr())
         )
         self.data_type = self.range_type | self.simple_type_name
 
         # Default value for generics - captures everything after ":=" until semicolon or closing paren
         # Enhanced to handle nested expressions like (others => '0')
         self.default_value = Suppress(":=") + original_text_for(
-            nestedExpr() | CharsNotIn(";)")
+            nested_expr() | CharsNotIn(";)")
         )
 
         # Enhanced port declaration parser

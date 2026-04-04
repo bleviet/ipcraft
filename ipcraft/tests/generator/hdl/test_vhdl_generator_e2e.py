@@ -37,7 +37,7 @@ class TestIpCoreProjectGeneratorE2E:
         yaml_file = example_dir / "test_cases" / "minimal.ip.yml"
 
         if not yaml_file.exists():
-            pytest.skip(f"Example file not found: {yaml_file}")
+            pytest.xfail(f"Issue #42: Example test data missing: {yaml_file}")
 
         # Parse YAML
         ip_core = parser.parse_file(str(yaml_file))
@@ -57,7 +57,7 @@ class TestIpCoreProjectGeneratorE2E:
         yaml_file = example_dir / "test_cases" / "basic.ip.yml"
 
         if not yaml_file.exists():
-            pytest.skip(f"Example file not found: {yaml_file}")
+            pytest.xfail(f"Issue #42: Example test data missing: {yaml_file}")
 
         # Parse YAML
         ip_core = parser.parse_file(str(yaml_file))
@@ -82,7 +82,7 @@ class TestIpCoreProjectGeneratorE2E:
         yaml_file = example_dir / "timers" / "my_timer_core.ip.yml"
 
         if not yaml_file.exists():
-            pytest.skip(f"Example file not found: {yaml_file}")
+            pytest.xfail(f"Issue #42: Example test data missing: {yaml_file}")
 
         # Parse YAML
         ip_core = parser.parse_file(str(yaml_file))
@@ -106,7 +106,7 @@ class TestIpCoreProjectGeneratorE2E:
         yaml_file = example_dir / "test_cases" / "basic.ip.yml"
 
         if not yaml_file.exists():
-            pytest.skip(f"Example file not found: {yaml_file}")
+            pytest.xfail(f"Issue #42: Example test data missing: {yaml_file}")
 
         # Parse YAML
         ip_core = parser.parse_file(str(yaml_file))
@@ -131,7 +131,7 @@ class TestIpCoreProjectGeneratorE2E:
         yaml_file = example_dir / "test_cases" / "minimal.ip.yml"
 
         if not yaml_file.exists():
-            pytest.skip(f"Example file not found: {yaml_file}")
+            pytest.xfail(f"Issue #42: Example test data missing: {yaml_file}")
 
         # Parse YAML
         ip_core = parser.parse_file(str(yaml_file))
@@ -247,7 +247,7 @@ class TestIpCoreProjectGeneratorSyntaxValidation:
 
         yaml_file = example_dir / "test_cases" / "minimal.ip.yml"
         if not yaml_file.exists():
-            pytest.skip(f"Example file not found: {yaml_file}")
+            pytest.xfail(f"Issue #42: Example test data missing: {yaml_file}")
 
         # Parse and generate
         ip_core = parser.parse_file(str(yaml_file))
@@ -350,7 +350,7 @@ class TestIpCoreProjectGeneratorSyntaxValidation:
 
         yaml_file = example_dir / "test_cases" / "basic.ip.yml"
         if not yaml_file.exists():
-            pytest.skip(f"Example file not found: {yaml_file}")
+            pytest.xfail(f"Issue #42: Example test data missing: {yaml_file}")
 
         # Parse and generate
         ip_core = parser.parse_file(str(yaml_file))

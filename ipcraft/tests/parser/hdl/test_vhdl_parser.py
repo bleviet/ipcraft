@@ -210,7 +210,7 @@ end entity counter;
 
         # Check if file exists, skip if not (might not be present in fresh checkout environment)
         if not os.path.exists(file_path):
-            pytest.skip(f"Test file not found: {file_path}")
+            pytest.xfail(f"Issue #42: Test file not found: {file_path}")
 
         result = parser.parse_file(file_path)
 

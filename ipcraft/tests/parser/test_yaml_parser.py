@@ -379,7 +379,7 @@ def test_parse_real_timer_core():
     timer_yml = EXAMPLES_DIR / "my_timer_core.yml"
 
     if not timer_yml.exists():
-        pytest.skip(f"Example file not found: {timer_yml}")
+        pytest.xfail(f"Issue #42: Example test data missing: {timer_yml}")
 
     parser = YamlIpCoreParser()
     ip_core = parser.parse_file(timer_yml)

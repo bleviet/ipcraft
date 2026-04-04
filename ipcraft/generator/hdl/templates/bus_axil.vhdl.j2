@@ -171,9 +171,19 @@ begin
   -- Generate write enable to register bank when both address and data received
   ----------------------------------------------------------------------------
   wr_en   <= write_txn.addr_received and write_txn.data_received;
+{% set has_wstrb = false %}
+{% for port in bus_ports %}
+{% if port.logical_name == 'WSTRB' %}
+{% set has_wstrb = true %}
+{% endif %}
+{% endfor %}
   wr_addr <= axi_awaddr;
   wr_data <= wdata_i;
+{% if has_wstrb %}
   wr_strb <= wstrb_i;
+{% else %}
+  wr_strb <= (others => '1');
+{% endif %}
 
   ----------------------------------------------------------------------------
   -- Write Response Logic
