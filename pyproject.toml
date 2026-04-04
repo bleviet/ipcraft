@@ -16,6 +16,8 @@ dependencies = [
     "click",
     "ipcraft-spec",
     "pyparsing>=3.1.4",
+    "questionary>=2.1.0",
+    "watchdog>=4.0.2",
 ]
 
 [tool.uv.sources]
