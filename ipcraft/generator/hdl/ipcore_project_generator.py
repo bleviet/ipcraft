@@ -54,6 +54,9 @@ class IpCoreProjectGenerator(
         super().__init__(search_paths)
         self._bus_library = bus_library or get_bus_library()
         self.bus_definitions = self._bus_library.get_all_raw_dicts()
+        # Relative path from tb/ directory to the .mm.yml file.
+        # Set externally before generate_all() when the default '../' is not correct.
+        self.mm_yaml_relpath: Optional[str] = None
 
     def _get_vhdl_port_type(self, width: int, logical_name: str) -> str:
         """Get VHDL type string for a port based on width.
@@ -461,8 +464,14 @@ class IpCoreProjectGenerator(
             "clock_port": clock_port,
             "reset_port": reset_port,
             "reset_active_high": reset_active_high,
-            # Relative path from tb/ directory to memmap file (2 levels up for structured output)
-            "memmap_relpath": f"../../{ip_core.vlnv.name.lower()}.mm.yml",
+            # Relative path from tb/ to the .mm.yml file.
+            # Default: one level up (tb/ is a sibling of the .mm.yml).
+            # Set self.mm_yaml_relpath before calling generate_all() to override.
+            "memmap_relpath": (
+                self.mm_yaml_relpath
+                if self.mm_yaml_relpath is not None
+                else f"../{ip_core.vlnv.name.lower()}.mm.yml"
+            ),
         }
 
     def generate_package(self, ip_core: IpCore) -> str:

@@ -19,6 +19,7 @@ Global flags (work on every subcommand):
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -243,6 +244,14 @@ def _run_generate_core(args, output_base: Path) -> dict:
 
     log("Generating files...", args)
     gen = IpCoreProjectGenerator(template_dir=args.template_dir)
+
+    # Compute the relative path from tb/ to the .mm.yml file.
+    # The .mm.yml lives beside the .ip.yml (ip_dir); tb/ lives under output_base.
+    ip_dir = Path(args.input).resolve().parent
+    mm_file = ip_dir / f"{ip_core.vlnv.name.lower()}.mm.yml"
+    tb_dir = output_base.resolve() / "tb"
+    gen.mm_yaml_relpath = str(Path(os.path.relpath(mm_file, tb_dir)).as_posix())
+
     all_files = gen.generate_all(
         ip_core,
         bus_type=bus_type,
