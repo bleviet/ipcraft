@@ -600,7 +600,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     new_p.add_argument("name", help="Name of the IP core (used as filename prefix)")
-    new_p.add_argument("--vendor", default="example.com", help="VLNV vendor name (default: example.com)")
+    new_p.add_argument("--vendor", default="ipcraft", help="VLNV vendor name (default: ipcraft)")
     new_p.add_argument("--library", default="examples", help="VLNV library name (default: examples)")
     new_p.add_argument("--version", default="1.0.0", help="VLNV version (default: 1.0.0)")
     new_p.add_argument(

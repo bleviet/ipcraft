@@ -7,7 +7,7 @@ from ipcraft.utils import BUS_DEFINITIONS_PATH
 
 def generate_new_ip(
     name: str,
-    vendor: str = "example.com",
+    vendor: str = "ipcraft",
     library: str = "examples",
     version: str = "1.0.0",
     bus_type: Optional[str] = None,

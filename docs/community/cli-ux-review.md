@@ -441,7 +441,7 @@ Below is the full question sequence I would want, with the control type for each
 ┌─ IP Core Identity ──────────────────────────────────────────────┐
 │                                                                   │
 │  Core name    [my_core        ]                                   │
-│  Vendor       [example.com    ]   (e.g. acme-fpga.com)            │
+│  Vendor       [ipcraft    ]   (e.g. acme-fpga.com)            │
 │  Library      [ip             ]   (e.g. peripherals)              │
 │  Version      [1.0.0          ]                                   │
 │  Description  [               ]   (optional, one line)            │
@@ -561,7 +561,7 @@ possible (a core named `pwm_core` should see `o_pwm` in the suggestions list).
 │  ──────────────────────────────────────────────────              │
 │  Equivalent CLI command (copy to script or CI):                   │
 │                                                                   │
-│  ipcraft new my_core --vendor example.com --bus AXI4_LITE \       │
+│  ipcraft new my_core --vendor ipcraft --bus AXI4_LITE \       │
 │    --output ./my_core && \                                        │
 │  ipcraft generate ./my_core/my_core.ip.yml --vendor both          │
 │                                                                   │

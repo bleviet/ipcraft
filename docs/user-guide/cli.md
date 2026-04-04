@@ -20,7 +20,7 @@ ipcraft new <name> [options]
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--vendor` | `example.com` | VLNV vendor name |
+| `--vendor` | `ipcraft` | VLNV vendor name |
 | `--library` | `examples` | VLNV library name |
 | `--version` | `1.0.0` | VLNV version |
 | `--bus` | None | Include a default bus interface (e.g., `AXI4_LITE`) |

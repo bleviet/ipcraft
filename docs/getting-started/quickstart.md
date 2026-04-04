@@ -20,7 +20,7 @@ Edit the generated `my_core.ip.yml` to fit your needs:
 
 ```yaml
 vlnv:
-  vendor: example.com
+  vendor: ipcraft
   library: examples
   name: my_core
   version: 1.0.0

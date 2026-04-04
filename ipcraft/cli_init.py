@@ -128,7 +128,7 @@ def _phase_identity() -> Optional[dict]:
     if name is None:
         return None
 
-    vendor = questionary.text("Vendor:", default="example.com").ask()
+    vendor = questionary.text("Vendor:", default="ipcraft").ask()
     if vendor is None:
         return None
 
