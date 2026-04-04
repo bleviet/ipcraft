@@ -35,9 +35,13 @@ def generate_new_ip(
     templates_dir = spec_dir / "templates"
 
     # Select template based on bus_type
-    if bus_type and bus_type.upper() in ["AXI4L", "AXIL", "AXI4-LITE"]:
+    _bt = bus_type.upper() if bus_type else ""
+    if _bt in ["AXI4L", "AXIL", "AXI4-LITE"]:
         ip_template = templates_dir / "axi_slave.ip.yml"
         mm_template = templates_dir / "axi_slave.mm.yml"
+    elif _bt in ["AVALON_MM", "AVMM", "AVALON-MM", "AVALON_MEMORY_MAPPED"]:
+        ip_template = templates_dir / "avalon_peripheral.ip.yml"
+        mm_template = templates_dir / "basic.mm.yml"
     else:
         ip_template = templates_dir / "basic.ip.yml"
         mm_template = templates_dir / "basic.mm.yml"
