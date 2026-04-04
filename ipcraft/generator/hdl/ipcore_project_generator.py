@@ -175,15 +175,14 @@ class IpCoreProjectGenerator(
                 for field in reg_fields:
                     acc_str = enum_value(field.access)
                     reg_acc_str = enum_value(reg_access)
+                    computed_access = acc_str.lower() if acc_str else reg_acc_str.lower()
 
                     fields.append(
                         {
                             "name": field.name,
                             "offset": field.bit_offset,
                             "width": field.bit_width,
-                            "access": (
-                                acc_str.lower() if acc_str else reg_acc_str.lower()
-                            ),
+                            "access": computed_access,
                             "reset_value": (
                                 field.reset_value
                                 if field.reset_value is not None
@@ -205,6 +204,11 @@ class IpCoreProjectGenerator(
             reg_acc_lower = (reg_acc_str or "").lower()
             is_hw2sw = has_hw_driven_fields or reg_acc_lower in {"read-only", "ro"}
 
+            # Gather W1C fields for the register
+            w1c_fields = [f for f in fields if f["access"] in {"write-1-to-clear", "read-write-1-to-clear", "rw1c", "w1c"}]
+            if not reg_fields and reg_acc_lower in {"write-1-to-clear", "read-write-1-to-clear", "rw1c", "w1c"}:
+                w1c_fields = [{"name": "data", "offset": 0, "width": 32, "access": reg_acc_lower}]
+
             registers.append(
                 {
                     "name": prefix + reg_name,
@@ -219,6 +223,7 @@ class IpCoreProjectGenerator(
                         getattr(reg, "reset_value", None) or 0
                     ),
                     "hw2sw": is_hw2sw,
+                    "w1c_fields": w1c_fields,
                 }
             )
 

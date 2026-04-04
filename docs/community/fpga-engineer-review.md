@@ -606,6 +606,664 @@ once the remaining bus templates and documentation gaps are filled.
 
 ---
 
+## Expert Review Addendum
+
+**Reviewer:** Second-pass code-level review by FPGA design and verification engineer
+(Altera/Xilinx toolchain, formal verification background)
+
+**Scope:** Full codebase analysis of `model/`, `generator/`, `driver/`, `runtime/`,
+`cli.py`, and all Jinja2 templates.  142 passing tests confirmed.  Findings are
+organised into critical bugs, important improvements, and new proposals.
+
+### Codebase Architecture Assessment
+
+The layered architecture is clean and well-separated:
+
+```
+model/      (Pydantic data models -- single source of truth)
+parser/     (YAML / VHDL -> IpCore model)
+generator/  (IpCore model -> VHDL / XML / TCL via Jinja2)
+driver/     (IpCore model -> runtime Cocotb driver)
+cli.py      (User interface)
+```
+
+The separation between `model/memory_map.py` (Pydantic definitions with `*Def`
+suffix) and `runtime/register.py` (runtime accessor objects) is a smart design
+decision.  It keeps schema validation clean and avoids Cocotb dependencies in the
+model layer.
+
+| Area | Rating | Notes |
+|------|--------|-------|
+| Model layer (`model/`) | 9/10 | Clean Pydantic models, good validation, proper type hints |
+| Generator (`generator/hdl/`) | 7/10 | Works well but has design concerns listed below |
+| Templates (`.j2`) | 7/10 | Functionally correct VHDL, some synthesizability concerns |
+| CLI (`cli.py`) | 8/10 | Clean argparse, good JSON mode, proper error handling |
+| Driver (`driver/`) | 8/10 | Elegant `load_driver()` from YAML, good async support |
+| Tests | 8/10 | 142 passing, 37 skipped worth investigating |
+| Validators (`validators.py`) | 8/10 | Comprehensive overlap, alignment, reference checks |
+
+---
+
+### Critical Bugs
+
+These must be fixed before the next release.  All are localised template or
+generator changes with no architectural impact.
+
+#### ~~BUG-1: `write-1-to-clear` is modeled but not implemented in the register file~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/register_file.vhdl.j2` (write process,
+line ~96)
+
+The write process in `register_file.vhdl.j2` handles `read-write` and
+`read-only` access types in the `case` statement, but there is no `write-1-to-clear`
+arm.  For W1C, the write process must clear only the bits that software writes as
+`'1'`, not overwrite the register:
+
+```vhdl
+-- Current (wrong for W1C): overwrites the field
+regs.status <= to_status(v_wdata);
+
+-- Correct W1C behaviour: clear bits where software writes '1'
+regs.status.overflow <= regs.status.overflow and not v_wdata(1);
+```
+
+The model layer (`AccessType.WRITE_1_TO_CLEAR`) and the Cocotb driver both
+handle W1C correctly.  The mismatch means simulation may show correct behaviour
+(the driver knows W1C semantics) while the actual hardware does not implement
+them.
+
+**Impact:** Safety-critical for interrupt status registers.  A hardware interrupt
+flag that does not clear on W1C will cause interrupt storms.
+
+**Fix details:** See [TASK-01](#task-01--implement-w1c-in-register-file-template)
+below.
+
+---
+
+#### ~~BUG-2: `reg_addr()` function returns wrong addresses for sparse register maps~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/package.vhdl.j2` (line ~165)
+
+```vhdl
+function reg_addr(reg : t_reg_id) return natural is
+begin
+  return t_reg_id'pos(reg) * C_REG_WIDTH;
+end function;
+```
+
+This assumes contiguous registers with no gaps.  If a user defines registers at
+offsets `0x00`, `0x04`, `0x10` (skipping `0x08` and `0x0C`), the function returns
+`0x00`, `0x04`, `0x08` -- wrong for the third register.
+
+The register file's `case` statement uses `to_integer(unsigned(addr))` from the
+actual bus address, so read/write *decoding* works correctly.  But any user code
+that calls `reg_addr(REG_STATUS)` from the package will get an incorrect offset.
+
+**Fix details:** See [TASK-02](#task-02--fix-reg_addr-for-sparse-address-maps)
+below.
+
+---
+
+#### ~~BUG-3: Hard-coded `s_axi_` prefix in AXI-Lite output signal assignments~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/bus_axil.vhdl.j2` (lines ~99-117)
+
+The output port assignments use hard-coded `s_axi_` prefixes:
+
+```jinja
+{% if port.logical_name == 'AWREADY' %}
+  s_axi_awready <= axi_awready;
+```
+
+But the entity port declarations above correctly use `{{ port.name }}` (which
+respects the configured `physical_prefix`).  If a user sets `physical_prefix:
+s_ctrl_`, the entity will declare `s_ctrl_awready` but the architecture will
+try to drive `s_axi_awready` -- a compilation error.
+
+**Fix details:** See [TASK-03](#task-03--use-template-variable-for-bus-port-prefix)
+below.
+
+---
+
+### Important Improvements
+
+#### IMP-1: Mixed access-type string comparisons in the generator
+
+**File:** `ipcraft/generator/hdl/ipcore_project_generator.py` (line ~200)
+
+```python
+_ro_accesses = {"read-only", "ro", "write-1-to-clear", "rw1c", "w1c"}
+```
+
+This duplicates normalisation already handled by `AccessType.from_string()`.
+Use enum comparisons instead of string sets to avoid drift.
+
+**Fix:** Replace raw string checks with:
+
+```python
+from ipcraft.model.memory_map import AccessType
+
+access = AccessType.from_string(enum_value(f.access))
+is_hw_driven = access in {AccessType.READ_ONLY, AccessType.WRITE_1_TO_CLEAR}
+```
+
+---
+
+#### IMP-2: Address width is hard-coded to 8
+
+**File:** `ipcraft/generator/hdl/ipcore_project_generator.py` (line ~419)
+
+```python
+"addr_width": 8,
+```
+
+`C_ADDR_WIDTH` should be auto-calculated from the maximum register offset:
+
+```python
+max_offset = max((r["offset"] + 4) for r in registers) if registers else 16
+addr_width = max(max_offset.bit_length(), 4)  # minimum 4 bits
+```
+
+A hard-coded `8` silently limits the address space to 256 bytes (64 registers).
+Users with larger register maps will get incorrect decode logic.
+
+---
+
+#### IMP-3: Missing `WSTRB` default when port is absent
+
+**Files:** `bus_axil.vhdl.j2`, `register_file.vhdl.j2`
+
+If `WSTRB` is not included as an optional port, the register file's `wr_strb`
+input is left undriven.  The bus wrapper should default to all-ones:
+
+```vhdl
+wr_strb <= s_axi_wstrb when HAS_WSTRB else (others => '1');
+```
+
+Or the template should conditionally omit `wr_strb` from the port map and
+hard-wire it inside the register file.
+
+---
+
+#### IMP-4: pyparsing deprecation warnings
+
+**File:** `ipcraft/parser/hdl/vhdl_parser.py` (lines 72, 79, 86)
+
+The VHDL parser uses deprecated pyparsing APIs (`oneOf`, `nestedExpr`).  Migrate
+to `one_of` and `nested_expr` to suppress warnings and ensure forward
+compatibility with pyparsing >= 3.2.
+
+---
+
+#### IMP-5: 37 skipped tests uninvestigated
+
+The test suite reports `142 passed, 37 skipped`.  Skipped tests may mask
+regressions.  Each skipped test should either have a documented reason (missing
+simulator, platform-specific) or be converted to `xfail` with a ticket reference.
+
+---
+
+### New Improvement Proposals
+
+These extend the original P0/P1 wishlist based on the codebase analysis.
+
+#### PROP-1: AXI4-Lite Formal Verification Property File
+
+Generate a `.psl` or SystemVerilog assertion file alongside the bus wrapper
+containing AXI4 protocol compliance properties:
+
+- `AWREADY` must not assert without `AWVALID`
+- `RDATA` must be stable while `RVALID` and not `RREADY`
+- `BRESP` must be `OKAY` for successful writes
+- No channel may starve indefinitely (liveness)
+
+This would make ipcraft the only register generator that ships with formal
+verification hooks.  The implementation is a new `formal_axil.psl.j2` template.
+
+---
+
+#### PROP-2: Register Documentation Generation (Markdown/HTML)
+
+Add a `regmap_docs.md.j2` template producing a human-readable register map:
+
+- Address table with name, offset, access type, reset value
+- Per-register bit-field table
+- Auto-generated from the same `mm.yml` used for VHDL
+
+This is zero-effort for the user and solves the perennial documentation-drift
+problem.  Consider also adding `--format html` using a second template.
+
+---
+
+#### PROP-3: First-Class Interrupt Support
+
+Add interrupt modeling to the memory map schema:
+
+```yaml
+interrupts:
+  - name: IRQ
+    statusRegister: INT_STATUS    # W1C register
+    enableRegister: INT_ENABLE    # RW register
+    output: o_irq                 # active-high output
+```
+
+The generator would emit:
+- `INT_STATUS` (W1C) and `INT_ENABLE` (RW) registers
+- `o_irq <= '1' when (int_status and int_enable) /= x"0" else '0';`
+- Corresponding entries in the Cocotb testbench
+
+This is the single most requested feature in every IP register tool.
+
+---
+
+#### PROP-4: WSTRB-Aware Sub-Byte Field Masking
+
+The current `apply_wstrb` works at byte granularity.  For sub-byte fields (e.g.,
+a 2-bit MODE field at bits [2:1]), a write with full WSTRB overwrites all 8 bits
+of the byte, potentially corrupting adjacent fields in the same byte.
+
+The fix is to generate a per-field mask in the write process so that only defined
+field bits are updated on write.  This matches the behaviour of Xilinx AXI GPIO
+and AXI Timer IPs.
+
+---
+
+#### PROP-5: Change Impact Analysis CLI
+
+Add `ipcraft diff old.ip.yml new.ip.yml` that compares two versions and reports:
+
+- Registers added/removed/modified
+- Address changes
+- Field width or access-type changes
+- Which generated files would be affected
+
+Essential for CI/CD pipelines managing IP repositories.  The original review
+listed this as P1; based on codebase analysis, the data model already contains
+everything needed to implement this as a model-level diff.
+
+---
+
+## Developer Task Backlog
+
+Actionable tasks derived from both the original review and the expert addendum.
+Each task includes file references, implementation guidance, and a verification
+method.
+
+### ~~TASK-01 -- Implement W1C in register file template~~ ✅ **Done**
+
+**Priority:** Critical
+**Files:**
+- `ipcraft/generator/hdl/templates/register_file.vhdl.j2`
+- `ipcraft/generator/hdl/ipcore_project_generator.py`
+
+**Implementation:**
+
+1. In `_prepare_registers()`, propagate a `w1c_fields` list to the template
+   context for each register.  A field is W1C if its access type normalises to
+   `AccessType.WRITE_1_TO_CLEAR` or `AccessType.READ_WRITE_1_TO_CLEAR`.
+
+2. In `register_file.vhdl.j2`, add a W1C branch in the write `case` statement:
+
+```jinja
+{% if reg.w1c_fields %}
+          when t_reg_id'pos(REG_{{ reg.name | upper }}) =>
+            -- Write-1-to-clear: clear bits where software writes '1'
+{% for field in reg.w1c_fields %}
+{% if field.width == 1 %}
+            regs.{{ reg.name | lower }}.{{ field.name | lower }} <=
+              regs.{{ reg.name | lower }}.{{ field.name | lower }} and not wr_data({{ field.offset }});
+{% else %}
+            regs.{{ reg.name | lower }}.{{ field.name | lower }} <=
+              regs.{{ reg.name | lower }}.{{ field.name | lower }}
+              and not wr_data({{ field.offset + field.width - 1 }} downto {{ field.offset }});
+{% endif %}
+{% endfor %}
+{% endif %}
+```
+
+3. For mixed registers (some fields RW, some W1C), generate per-field handling
+   within the same `when` arm.  The RW fields use `apply_wstrb`; the W1C fields
+   use the AND-NOT pattern above.
+
+4. W1C registers also need a hardware *set* path.  Add a `hw_set` input to the
+   register file so that hardware can assert status bits:
+
+```vhdl
+-- In the write process, after the case statement:
+-- Hardware set has priority over software clear
+{% for reg in registers %}
+{% if reg.w1c_fields %}
+{% for field in reg.w1c_fields %}
+if regs_in.{{ reg.name | lower }}.{{ field.name | lower }} = '1' then
+  regs.{{ reg.name | lower }}.{{ field.name | lower }} <= '1';
+end if;
+{% endfor %}
+{% endif %}
+{% endfor %}
+```
+
+**Verification:**
+- Add a unit test with a W1C STATUS register
+- Write `0xFF` to the register; read back should show `0xFF`
+- Write `0x02` (W1C bit 1); read back should show `0xFD`
+- Hardware sets bit 1 again; read back should show `0xFF`
+
+---
+
+### ~~TASK-02 -- Fix `reg_addr()` for sparse address maps~~ ✅ **Done**
+
+**Priority:** Critical
+**File:** `ipcraft/generator/hdl/templates/package.vhdl.j2`
+
+**Implementation:**
+
+Replace the linear calculation with a lookup:
+
+```jinja
+  function reg_addr(reg : t_reg_id) return natural is
+  begin
+    case reg is
+{% for reg in registers %}
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+      when REG_{{ reg.name | upper }}_{{ i }} => return {{ reg.offset + (i * reg.stride) }};
+{% endfor %}
+{% else %}
+      when REG_{{ reg.name | upper }} => return {{ reg.offset }};
+{% endif %}
+{% endfor %}
+    end case;
+  end function;
+```
+
+This handles both contiguous and sparse register maps correctly.
+
+**Verification:**
+- Create a test IP with registers at offsets `0x00`, `0x04`, `0x10`, `0x20`
+- Compile the generated package
+- Assert that `reg_addr(REG_STATUS)` returns `0x10` (not `0x08`)
+
+---
+
+### ~~TASK-03 -- Use template variable for bus port prefix~~ ✅ **Done**
+
+**Priority:** Critical
+**File:** `ipcraft/generator/hdl/templates/bus_axil.vhdl.j2`
+
+**Implementation:**
+
+Replace all hard-coded `s_axi_*` references in the output assignments
+(lines ~99-117) with `{{ port.name }}`:
+
+```jinja
+  -- Connect internal AXI signals to ports
+{% for port in bus_ports %}
+{% if port.direction == 'out' %}
+  {{ port.name }} <= axi_{{ port.logical_name | lower }};
+{% endif %}
+{% endfor %}
+```
+
+And for input references in process bodies, replace `s_axi_awvalid` with a
+template-generated signal name.  The cleanest approach is to generate
+`signal` aliases at the top of the architecture:
+
+```jinja
+  -- Alias bus port names to internal signals
+{% for port in bus_ports %}
+{% if port.direction == 'in' %}
+  alias {{ port.logical_name | lower }}_i : {{ port.type }} is {{ port.name }};
+{% endif %}
+{% endfor %}
+```
+
+Then use `awvalid_i`, `wvalid_i`, etc. throughout the process bodies.
+
+**Verification:**
+- Create a test IP with `physical_prefix: s_ctrl_`
+- Run `ipcraft generate`
+- Compile the generated VHDL -- must succeed without unresolved signals
+
+---
+
+### TASK-04 -- Auto-calculate `C_ADDR_WIDTH`
+
+**Priority:** Important
+**File:** `ipcraft/generator/hdl/ipcore_project_generator.py`
+
+**Implementation:**
+
+In `_get_template_context()`, replace:
+
+```python
+"addr_width": 8,
+```
+
+With:
+
+```python
+max_addr = max((r["offset"] + 4) for r in registers) if registers else 16
+addr_width = max(max_addr.bit_length(), 4)
+```
+
+Update `C_ADDR_WIDTH` in `package.vhdl.j2` to use this value.  Also update
+`xilinx_component_xml.j2` and `intel_hw_tcl.j2` if they reference address width.
+
+**Verification:**
+- Create an IP with 128 registers (offset up to `0x1FC`)
+- Verify `C_ADDR_WIDTH` is generated as 9 (not 8)
+- Compile and simulate
+
+---
+
+### TASK-05 -- Normalise access-type comparisons in generator
+
+**Priority:** Important
+**File:** `ipcraft/generator/hdl/ipcore_project_generator.py`
+
+**Implementation:**
+
+Replace all raw string sets like:
+
+```python
+_ro_accesses = {"read-only", "ro", "write-1-to-clear", "rw1c", "w1c"}
+```
+
+With enum-based comparisons:
+
+```python
+from ipcraft.model.memory_map import AccessType
+
+def _is_hw_driven(access_str: str) -> bool:
+    access = AccessType.from_string(access_str)
+    return access in {AccessType.READ_ONLY, AccessType.WRITE_1_TO_CLEAR,
+                      AccessType.READ_WRITE_1_TO_CLEAR}
+```
+
+Apply the same pattern to `sw_access` / `hw_access` filter lists in
+`_get_template_context()`.
+
+**Verification:**
+- Existing tests must pass
+- Add a test with `access: rw1c` and verify it is classified as hw-driven
+
+---
+
+### TASK-06 -- C/C++ register header template
+
+**Priority:** P0
+**Files (new):**
+- `ipcraft/generator/hdl/templates/c_header.h.j2`
+- Add generation call in `ipcore_project_generator.py`
+
+**Implementation:**
+
+Create `c_header.h.j2`:
+
+```c
+/* {{ entity_name | upper }}_REGS.h
+ * Generated by ipcraft -- DO NOT EDIT
+ */
+#ifndef {{ entity_name | upper }}_REGS_H
+#define {{ entity_name | upper }}_REGS_H
+
+#include <stdint.h>
+
+/* Base address (set by SoC integration) */
+#ifndef {{ entity_name | upper }}_BASE
+#define {{ entity_name | upper }}_BASE 0x00000000UL
+#endif
+
+/* Register offsets */
+{% for reg in registers %}
+#define {{ entity_name | upper }}_{{ reg.name | upper }}_OFFSET  0x{{ "%04X" | format(reg.offset) }}UL
+{% endfor %}
+
+/* Field masks and shifts */
+{% for reg in registers %}
+{% for field in reg.fields %}
+#define {{ entity_name | upper }}_{{ reg.name | upper }}_{{ field.name | upper }}_SHIFT  {{ field.offset }}
+#define {{ entity_name | upper }}_{{ reg.name | upper }}_{{ field.name | upper }}_MASK   0x{{ "%08X" | format(((1 << field.width) - 1) << field.offset) }}UL
+#define {{ entity_name | upper }}_{{ reg.name | upper }}_{{ field.name | upper }}_WIDTH  {{ field.width }}
+{% endfor %}
+{% endfor %}
+
+/* Accessor macros */
+#define {{ entity_name | upper }}_READ(reg) \
+    (*(volatile uint32_t *)({{ entity_name | upper }}_BASE + {{ entity_name | upper }}_##reg##_OFFSET))
+
+#define {{ entity_name | upper }}_WRITE(reg, val) \
+    (*(volatile uint32_t *)({{ entity_name | upper }}_BASE + {{ entity_name | upper }}_##reg##_OFFSET) = (val))
+
+#define {{ entity_name | upper }}_READ_FIELD(reg, field) \
+    (({{ entity_name | upper }}_READ(reg) & {{ entity_name | upper }}_##reg##_##field##_MASK) \
+     >> {{ entity_name | upper }}_##reg##_##field##_SHIFT)
+
+#define {{ entity_name | upper }}_WRITE_FIELD(reg, field, val) \
+    {{ entity_name | upper }}_WRITE(reg, \
+        ({{ entity_name | upper }}_READ(reg) & ~{{ entity_name | upper }}_##reg##_##field##_MASK) \
+        | (((val) << {{ entity_name | upper }}_##reg##_##field##_SHIFT) \
+           & {{ entity_name | upper }}_##reg##_##field##_MASK))
+
+#endif /* {{ entity_name | upper }}_REGS_H */
+```
+
+Wire into `generate_all_with_structure()`:
+
+```python
+if include_regs:
+    files[f"sw/{name}_regs.h"] = self.generate_c_header(ip_core)
+```
+
+Add `--c-header` / `--no-c-header` CLI flags.
+
+**Verification:**
+- Generate for the PWM core example
+- Compile with `gcc -fsyntax-only -Wall pwm_core_regs.h`
+- Verify offsets match the VHDL package constants
+
+---
+
+### TASK-07 -- Register map documentation template
+
+**Priority:** P0
+**File (new):** `ipcraft/generator/hdl/templates/regmap_docs.md.j2`
+
+**Implementation:**
+
+Generate a Markdown document with:
+
+1. Title and description from `ip.yml`
+2. Register summary table (offset, name, access, reset value)
+3. Per-register detail sections with bit-field tables
+
+Example output structure:
+
+```markdown
+# PWM Core Register Map
+
+| Offset | Name   | Access | Reset      | Description             |
+|--------|--------|--------|------------|-------------------------|
+| 0x0000 | CTRL   | RW     | 0x00000000 | Control register        |
+| 0x0004 | PERIOD | RW     | 0x000003FF | PWM period in clk cycles|
+
+## CTRL (0x0000)
+
+| Bits  | Name   | Access | Reset | Description          |
+|-------|--------|--------|-------|----------------------|
+| [0]   | ENABLE | RW     | 0     | Enable PWM output    |
+| [2:1] | MODE   | RW     | 0     | 0=single, 1=cont ... |
+```
+
+Wire into `generate_all_with_structure()` alongside the testbench.
+
+**Verification:**
+- Generate for PWM core
+- Verify the Markdown renders correctly
+- Cross-check offsets against generated VHDL package
+
+---
+
+### TASK-08 -- Migrate pyparsing deprecated APIs
+
+**Priority:** Important
+**File:** `ipcraft/parser/hdl/vhdl_parser.py`
+
+**Implementation:**
+
+| Old API | New API |
+|---------|---------|
+| `oneOf(...)` | `one_of(...)` |
+| `nestedExpr()` | `nested_expr()` |
+
+These are drop-in replacements.  Update imports and call sites at lines 72, 79,
+86.
+
+**Verification:**
+- Run `pytest ipcraft/tests/parser/` with `-W error::DeprecationWarning`
+- All parser tests must pass with zero warnings
+
+---
+
+### TASK-09 -- Investigate and document skipped tests
+
+**Priority:** Important
+**File:** Various test files
+
+**Implementation:**
+
+Run `pytest --co -q` to list all collected tests.  For each skipped test:
+
+1. If skipped due to missing simulator (GHDL, Icarus): add
+   `@pytest.mark.skipif(reason="requires GHDL")` with documentation
+2. If skipped due to incomplete feature: convert to `@pytest.mark.xfail`
+   with a ticket reference
+3. If skipped for no clear reason: investigate and either fix or remove
+
+**Verification:**
+- `pytest -v` output should show no unexplained skips
+- Each skip reason should be documented in a comment or marker
+
+---
+
+### Task Priority Matrix
+
+| Task | Priority | Effort | Risk if Deferred |
+|------|----------|--------|------------------|
+| TASK-01: W1C implementation | Critical | Medium (template + test) | Incorrect interrupt handling in hardware |
+| TASK-02: Sparse `reg_addr()` | Critical | Low (template only) | User code with wrong addresses |
+| TASK-03: Bus prefix variable | Critical | Low (template only) | Compile failure for non-default prefix |
+| TASK-04: Auto addr width | Important | Low (generator) | Silent address space limitation |
+| TASK-05: Enum access types | Important | Low (generator) | Future access-type bugs |
+| TASK-06: C header template | P0 | Medium (new template) | Manual drift for firmware teams |
+| TASK-07: Register docs | P0 | Low (new template) | Documentation drift |
+| TASK-08: pyparsing migration | Important | Low (3 line changes) | Future breakage |
+| TASK-09: Skipped tests | Important | Low (investigation) | Hidden regressions |
+
+---
+
 *This review reflects hands-on use of the ipcraft CLI and Python API.
 All command examples were run against the actual tool; output has been
-lightly reformatted for readability.*
+lightly reformatted for readability.  The expert addendum is based on
+static analysis of the full codebase and confirmed against 142 passing
+unit tests.*

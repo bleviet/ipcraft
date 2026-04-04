@@ -93,17 +93,35 @@ begin
 
         case v_addr_index is
 {% for reg in registers %}
-{% if reg.access in ['read-write', 'write-only', 'rw', 'wo', 'read_write', 'write_only'] %}
+{% if reg.access in ['read-write', 'write-only', 'rw', 'wo', 'read_write', 'write_only', 'read-write-1-to-clear', 'rw1c', 'write-1-to-clear', 'w1c'] %}
 {% if reg.is_array %}
 {% for i in range(reg.count) %}
           when t_reg_id'pos(REG_{{ reg.name | upper }}_{{ i }}) =>
             v_wdata := apply_wstrb(to_slv(regs.{{ reg.name | lower }}({{ i }})), wr_data, wr_strb);
             regs.{{ reg.name | lower }}({{ i }}) <= to_{{ reg.name | lower }}(v_wdata);
+{% if reg.w1c_fields %}
+{% for field in reg.w1c_fields %}
+{% if field.width == 1 %}
+            regs.{{ reg.name | lower }}({{ i }}).{{ field.name | lower }} <= regs.{{ reg.name | lower }}({{ i }}).{{ field.name | lower }} and not wr_data({{ field.offset }});
+{% else %}
+            regs.{{ reg.name | lower }}({{ i }}).{{ field.name | lower }} <= regs.{{ reg.name | lower }}({{ i }}).{{ field.name | lower }} and not wr_data({{ field.offset + field.width - 1 }} downto {{ field.offset }});
+{% endif %}
+{% endfor %}
+{% endif %}
 {% endfor %}
 {% else %}
           when t_reg_id'pos(REG_{{ reg.name | upper }}) =>
             v_wdata := apply_wstrb(to_slv(regs.{{ reg.name | lower }}), wr_data, wr_strb);
             regs.{{ reg.name | lower }} <= to_{{ reg.name | lower }}(v_wdata);
+{% if reg.w1c_fields %}
+{% for field in reg.w1c_fields %}
+{% if field.width == 1 %}
+            regs.{{ reg.name | lower }}.{{ field.name | lower }} <= regs.{{ reg.name | lower }}.{{ field.name | lower }} and not wr_data({{ field.offset }});
+{% else %}
+            regs.{{ reg.name | lower }}.{{ field.name | lower }} <= regs.{{ reg.name | lower }}.{{ field.name | lower }} and not wr_data({{ field.offset + field.width - 1 }} downto {{ field.offset }});
+{% endif %}
+{% endfor %}
+{% endif %}
 {% endif %}
 {% endif %}
 {% endfor %}
@@ -111,6 +129,41 @@ begin
             null;
         end case;
       end if;
+
+      -- Hardware set has priority over software clear for W1C fields
+{% for reg in registers %}
+{% if reg.w1c_fields %}
+{% for field in reg.w1c_fields %}
+{% if reg.is_array %}
+      for i in 0 to {{ reg.count - 1 }} loop
+{% if field.width == 1 %}
+        if regs_in.{{ reg.name | lower }}(i).{{ field.name | lower }} = '1' then
+          regs.{{ reg.name | lower }}(i).{{ field.name | lower }} <= '1';
+        end if;
+{% else %}
+        for j in 0 to {{ field.width - 1 }} loop
+          if regs_in.{{ reg.name | lower }}(i).{{ field.name | lower }}(j) = '1' then
+            regs.{{ reg.name | lower }}(i).{{ field.name | lower }}(j) <= '1';
+          end if;
+        end loop;
+{% endif %}
+      end loop;
+{% else %}
+{% if field.width == 1 %}
+      if regs_in.{{ reg.name | lower }}.{{ field.name | lower }} = '1' then
+        regs.{{ reg.name | lower }}.{{ field.name | lower }} <= '1';
+      end if;
+{% else %}
+      for j in 0 to {{ field.width - 1 }} loop
+        if regs_in.{{ reg.name | lower }}.{{ field.name | lower }}(j) = '1' then
+          regs.{{ reg.name | lower }}.{{ field.name | lower }}(j) <= '1';
+        end if;
+      end loop;
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
     end if;
   end process;
 

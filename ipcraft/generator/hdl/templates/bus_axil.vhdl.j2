@@ -74,6 +74,13 @@ architecture rtl of {{ entity_name }}_axil is
 
   signal write_txn : t_write_transaction := ('1', '0', '0');
 
+  -- Alias input bus port names to internal signals
+{% for port in bus_ports %}
+{% if port.direction == 'in' %}
+  alias {{ port.logical_name | lower }}_i : {{ port.type }} is {{ port.name }};
+{% endif %}
+{% endfor %}
+
 begin
 
   ----------------------------------------------------------------------------
@@ -97,22 +104,8 @@ begin
 
   -- Connect internal AXI signals to ports
 {% for port in bus_ports %}
-{% if port.logical_name == 'AWREADY' %}
-  s_axi_awready <= axi_awready;
-{% elif port.logical_name == 'WREADY' %}
-  s_axi_wready  <= axi_wready;
-{% elif port.logical_name == 'BRESP' %}
-  s_axi_bresp   <= axi_bresp;
-{% elif port.logical_name == 'BVALID' %}
-  s_axi_bvalid  <= axi_bvalid;
-{% elif port.logical_name == 'ARREADY' %}
-  s_axi_arready <= axi_arready;
-{% elif port.logical_name == 'RDATA' %}
-  s_axi_rdata   <= axi_rdata;
-{% elif port.logical_name == 'RRESP' %}
-  s_axi_rresp   <= axi_rresp;
-{% elif port.logical_name == 'RVALID' %}
-  s_axi_rvalid  <= axi_rvalid;
+{% if port.direction == 'out' %}
+  {{ port.name }} <= axi_{{ port.logical_name | lower }};
 {% endif %}
 {% endfor %}
 
@@ -129,13 +122,13 @@ begin
         axi_awaddr              <= (others => '0');
         write_txn.addr_received <= '0';
       else
-        if (axi_awready = '0' and s_axi_awvalid = '1' and write_txn.aw_en = '1') then
+        if (axi_awready = '0' and awvalid_i = '1' and write_txn.aw_en = '1') then
           -- Ready to accept write address
           axi_awready             <= '1';
           write_txn.aw_en         <= '0';
-          axi_awaddr              <= s_axi_awaddr;
+          axi_awaddr              <= awaddr_i;
           write_txn.addr_received <= '1';
-        elsif (axi_bvalid = '1' and s_axi_bready = '1') then
+        elsif (axi_bvalid = '1' and bready_i = '1') then
           -- Write response completed, ready for next transaction
           write_txn.aw_en         <= '1';
           write_txn.addr_received <= '0';
@@ -158,11 +151,11 @@ begin
         axi_wready              <= '0';
         write_txn.data_received <= '0';
       else
-        if (axi_wready = '0' and s_axi_wvalid = '1') then
+        if (axi_wready = '0' and wvalid_i = '1') then
           -- Ready to accept write data
           axi_wready              <= '1';
           write_txn.data_received <= '1';
-        elsif (axi_bvalid = '1' and s_axi_bready = '1') then
+        elsif (axi_bvalid = '1' and bready_i = '1') then
           -- Write response completed, ready for next transaction
           write_txn.data_received <= '0';
           axi_wready              <= '0';
@@ -179,8 +172,8 @@ begin
   ----------------------------------------------------------------------------
   wr_en   <= write_txn.addr_received and write_txn.data_received;
   wr_addr <= axi_awaddr;
-  wr_data <= s_axi_wdata;
-  wr_strb <= s_axi_wstrb;
+  wr_data <= wdata_i;
+  wr_strb <= wstrb_i;
 
   ----------------------------------------------------------------------------
   -- Write Response Logic
@@ -196,7 +189,7 @@ begin
           -- Both address and data received, assert write response
           axi_bvalid <= '1';
           axi_bresp  <= C_RESP_OKAY;
-        elsif (s_axi_bready = '1' and axi_bvalid = '1') then
+        elsif (bready_i = '1' and axi_bvalid = '1') then
           -- Write response accepted by master
           axi_bvalid <= '0';
         end if;
@@ -214,9 +207,9 @@ begin
         axi_arready <= '0';
         axi_araddr  <= (others => '0');
       else
-        if (axi_arready = '0' and s_axi_arvalid = '1') then
+        if (axi_arready = '0' and arvalid_i = '1') then
           axi_arready <= '1';
-          axi_araddr  <= s_axi_araddr;
+          axi_araddr  <= araddr_i;
         else
           axi_arready <= '0';
         end if;
@@ -228,7 +221,7 @@ begin
   -- Register Read Control
   -- Trigger read from register bank when address is accepted
   ----------------------------------------------------------------------------
-  rd_en   <= axi_arready and s_axi_arvalid and not axi_rvalid;
+  rd_en   <= axi_arready and arvalid_i and not axi_rvalid;
   rd_addr <= axi_araddr;
 
   ----------------------------------------------------------------------------
@@ -248,7 +241,7 @@ begin
           axi_rvalid <= '1';
           axi_rresp  <= C_RESP_OKAY;
           axi_rdata  <= rd_data;
-        elsif (axi_rvalid = '1' and s_axi_rready = '1') then
+        elsif (axi_rvalid = '1' and rready_i = '1') then
           -- Master accepted read data
           axi_rvalid <= '0';
         end if;

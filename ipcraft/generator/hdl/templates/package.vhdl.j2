@@ -164,7 +164,17 @@ package body {{ entity_name }}_pkg is
   ----------------------------------------------------------------------------
   function reg_addr(reg : t_reg_id) return natural is
   begin
-    return t_reg_id'pos(reg) * C_REG_WIDTH;
+    case reg is
+{% for reg in registers %}
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+      when REG_{{ reg.name | upper }}_{{ i }} => return {{ reg.offset + (i * reg.stride) }};
+{% endfor %}
+{% else %}
+      when REG_{{ reg.name | upper }} => return {{ reg.offset }};
+{% endif %}
+{% endfor %}
+    end case;
   end function;
 {% endif %}
 
