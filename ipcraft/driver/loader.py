@@ -19,12 +19,16 @@ class AddressBlock:
     _offset: int
     _bus: AbstractBusInterface
 
+    def __post_init__(self):
+        self._registers: list = []  # ordered list of register names for structured iteration
+
 
 class IpCoreDriver:
     """Root driver object containing address blocks."""
 
     def __init__(self, bus_interface: AbstractBusInterface):
         self._bus = bus_interface
+        self._blocks: list = []  # ordered list of block names for structured iteration
 
 
 def load_driver(
@@ -100,6 +104,7 @@ def load_driver(
                         register_class=register_class,
                     )
                     setattr(block_obj, reg_def.name, accessor)
+                    block_obj._registers.append(reg_def.name)
 
                 else:
                     # Single register
@@ -109,8 +114,10 @@ def load_driver(
                         register_class=register_class,
                     )
                     setattr(block_obj, reg_def.name, reg_obj)
+                    block_obj._registers.append(reg_def.name)
 
             # Attach block to driver
             setattr(driver, block_def.name, block_obj)
+            driver._blocks.append(block_def.name)
 
     return driver

@@ -437,6 +437,10 @@ class IpCoreProjectGenerator(
         max_addr = max((r["offset"] + r.get("stride", 4) * r.get("count", 1)) for r in registers) if registers else 16
         calc_addr_width = max(max_addr.bit_length(), 4)
 
+        # Pre-compute boolean flags to avoid Jinja2 block-scoping surprises.
+        # (Jinja2 {% set %} inside {% for %} does not propagate to outer scope.)
+        has_wstrb = any(p.get("logical_name") == "WSTRB" for p in bus_ports)
+
         return {
             "entity_name": ip_core.vlnv.name.lower(),
             "registers": registers,
@@ -446,6 +450,7 @@ class IpCoreProjectGenerator(
             "user_ports": self._prepare_user_ports(ip_core),
             "bus_type": bus_type,
             "bus_ports": bus_ports,
+            "has_wstrb": has_wstrb,
             "secondary_bus_ports": secondary_bus_ports,
             "expanded_bus_interfaces": expanded_bus_interfaces,
             "bus_prefix": bus_prefix if ip_core.bus_interfaces else "s_axi",

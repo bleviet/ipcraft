@@ -98,30 +98,36 @@ begin
 {% for i in range(reg.count) %}
           when t_reg_id'pos(REG_{{ reg.name | upper }}_{{ i }}) =>
             v_wdata := apply_wstrb(to_slv(regs.{{ reg.name | lower }}({{ i }})), wr_data, wr_strb);
-            regs.{{ reg.name | lower }}({{ i }}) <= to_{{ reg.name | lower }}(v_wdata);
 {% if reg.w1c_fields %}
+            -- W1C fields: mask in the vector before record conversion (single assignment, lint-safe)
 {% for field in reg.w1c_fields %}
 {% if field.width == 1 %}
-            regs.{{ reg.name | lower }}({{ i }}).{{ field.name | lower }} <= regs.{{ reg.name | lower }}({{ i }}).{{ field.name | lower }} and not wr_data({{ field.offset }});
+            v_wdata({{ field.offset }}) := to_slv(regs.{{ reg.name | lower }}({{ i }}))({{ field.offset }}) and not wr_data({{ field.offset }});
 {% else %}
-            regs.{{ reg.name | lower }}({{ i }}).{{ field.name | lower }} <= regs.{{ reg.name | lower }}({{ i }}).{{ field.name | lower }} and not wr_data({{ field.offset + field.width - 1 }} downto {{ field.offset }});
+            v_wdata({{ field.offset + field.width - 1 }} downto {{ field.offset }}) :=
+              to_slv(regs.{{ reg.name | lower }}({{ i }}))({{ field.offset + field.width - 1 }} downto {{ field.offset }})
+              and not wr_data({{ field.offset + field.width - 1 }} downto {{ field.offset }});
 {% endif %}
 {% endfor %}
 {% endif %}
+            regs.{{ reg.name | lower }}({{ i }}) <= to_{{ reg.name | lower }}(v_wdata);
 {% endfor %}
 {% else %}
           when t_reg_id'pos(REG_{{ reg.name | upper }}) =>
             v_wdata := apply_wstrb(to_slv(regs.{{ reg.name | lower }}), wr_data, wr_strb);
-            regs.{{ reg.name | lower }} <= to_{{ reg.name | lower }}(v_wdata);
 {% if reg.w1c_fields %}
+            -- W1C fields: mask in the vector before record conversion (single assignment, lint-safe)
 {% for field in reg.w1c_fields %}
 {% if field.width == 1 %}
-            regs.{{ reg.name | lower }}.{{ field.name | lower }} <= regs.{{ reg.name | lower }}.{{ field.name | lower }} and not wr_data({{ field.offset }});
+            v_wdata({{ field.offset }}) := to_slv(regs.{{ reg.name | lower }})({{ field.offset }}) and not wr_data({{ field.offset }});
 {% else %}
-            regs.{{ reg.name | lower }}.{{ field.name | lower }} <= regs.{{ reg.name | lower }}.{{ field.name | lower }} and not wr_data({{ field.offset + field.width - 1 }} downto {{ field.offset }});
+            v_wdata({{ field.offset + field.width - 1 }} downto {{ field.offset }}) :=
+              to_slv(regs.{{ reg.name | lower }})({{ field.offset + field.width - 1 }} downto {{ field.offset }})
+              and not wr_data({{ field.offset + field.width - 1 }} downto {{ field.offset }});
 {% endif %}
 {% endfor %}
 {% endif %}
+            regs.{{ reg.name | lower }} <= to_{{ reg.name | lower }}(v_wdata);
 {% endif %}
 {% endif %}
 {% endfor %}

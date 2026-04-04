@@ -1267,3 +1267,347 @@ All command examples were run against the actual tool; output has been
 lightly reformatted for readability.  The expert addendum is based on
 static analysis of the full codebase and confirmed against 142 passing
 unit tests.*
+
+---
+
+## Second Expert Review Addendum
+
+**Reviewer:** Third-pass deep-dive by senior FPGA design and verification engineer
+(15 years Altera/Xilinx toolchain, AXI protocol formal verification background)
+
+**Scope:** Full template-level code review of all `.j2` files, generator Python, and
+cross-layer consistency checks.  The previous addendum's tasks are confirmed done.
+This pass focuses on newly discovered issues and opportunities.
+
+---
+
+### What Has Been Done Well (Confirmed)
+
+The previous two review rounds surfaced real problems and the fixes are solid:
+
+- **W1C register file template (TASK-01):** The `w1c_fields` context and dual-assignment
+  pattern are correctly wired.  The hardware-set priority-over-software-clear logic
+  outside the `case` statement is the right architectural choice.
+- **Sparse `reg_addr()` (TASK-02):** The lookup-table approach using a `case` statement
+  is exactly right — it is both correct and synthesisable.  The old positional multiply
+  was a latent correctness bug waiting to bite anyone with a sparse map.
+- **Bus prefix aliases (TASK-03):** The `alias` approach in `bus_axil.vhdl.j2` is
+  idiomatic VHDL 2008 and eliminates the hard-coded `s_axi_` prefix cleanly.
+- **Auto `C_ADDR_WIDTH` (TASK-04):** The `max_addr.bit_length()` calculation in
+  `ipcore_project_generator.py` is correct and handles arrays via `stride × count`.
+- **Access-type enum normalisation (TASK-05):** The `AccessType.normalize()` path
+  replaces brittle string sets.  This is the right fix.
+- **Register docs template (TASK-07):** `regmap_docs.md.j2` exists and produces a
+  proper bit-field table.  Zero-effort documentation from the same YAML is a standout
+  feature.
+- **VHDL-2008 in the cocotb Makefile:** `--std=08` and `-frelaxed` are both set,
+  which is required for VHDL 2008 record sub-element assignments used in the register
+  file.  Good.
+- **`managed: false` auto-protection:** `_core.vhd` is correctly scaffolded as
+  unmanaged.  The fileset parser bug fix (reading `managed` from YAML) is confirmed.
+
+---
+
+### Newly Discovered Bugs
+
+#### ~~BUG-A: Jinja2 Variable Scoping — `has_wstrb` Always `false`~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/bus_axil.vhdl.j2` (lines ~174–185)
+
+**Severity: High — silent functional error**
+
+```jinja
+{% set has_wstrb = false %}
+{% for port in bus_ports %}
+{% if port.logical_name == 'WSTRB' %}
+{% set has_wstrb = true %}   {# ← This does NOT escape the for-loop scope in Jinja2 #}
+{% endif %}
+{% endfor %}
+  wr_strb <= wstrb_i;          {# ← This branch is NEVER reached #}
+```
+
+Jinja2 uses block-scoped `set`.  A `{% set %}` inside a `{% for %}` block does not
+propagate to the outer scope.  `has_wstrb` is therefore always `false` after the loop,
+so `wr_strb` is unconditionally driven with `(others => '1')`.
+
+**Consequence:** The WSTRB port is declared in the entity (if the bus definition
+includes it), connected via `alias wstrb_i`, but the alias is never used.  Byte-enable
+partial writes are silently ignored — the full 32-bit word is always written.  For
+firmware using `memcpy`-style accesses with non-aligned WSTRB patterns this is a
+data corruption hazard.
+
+**Fix — Option A (preferred, no Python change):**
+
+Use the Jinja2 `namespace()` idiom, the standard workaround for this scoping rule:
+
+```jinja
+{% set ns = namespace(has_wstrb=false) %}
+{% for port in bus_ports %}
+{% if port.logical_name == 'WSTRB' %}
+{% set ns.has_wstrb = true %}
+{% endif %}
+{% endfor %}
+{% if ns.has_wstrb %}
+  wr_strb <= wstrb_i;
+{% else %}
+  wr_strb <= (others => '1');
+{% endif %}
+```
+
+**Fix — Option B (cleaner, Python-side):**
+
+Pre-compute `has_wstrb` in `_get_template_context()` and pass it directly:
+
+```python
+"has_wstrb": any(p["logical_name"] == "WSTRB" for p in bus_ports),
+```
+
+Then the template becomes a simple `{% if has_wstrb %}`.  This moves logic out of
+templates and into testable Python — the better long-term approach.
+
+**Verification:**
+- Generate a core with an AXI-Lite bus that includes WSTRB
+- Confirm `wr_strb <= wstrb_i;` appears in the generated `_axil.vhd`
+- Write `0x01` to a 32-bit register with `wstrb = 0x01`; verify only byte 0 is updated
+
+---
+
+#### ~~BUG-B: W1C Registers Excluded from `t_regs_sw2hw` in `package.vhdl.j2`~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/package.vhdl.j2` (lines 90–91)
+
+**Severity: High — compile error for any pure-W1C register**
+
+```jinja
+{% set sw2hw_regs = registers | selectattr('access', 'in',
+    ['read-write', 'write-only', 'rw', 'wo']) | list %}
+{% set hw2sw_regs = registers | selectattr('access', 'in',
+    ['read-only', 'ro']) | list %}
+```
+
+A register whose *top-level* `access` is `write-1-to-clear` (or `rw1c`, `w1c`) matches
+**neither** filter.  It receives no record-type declaration.  The register file
+template's write `case` statement (line 96) does match it and tries to assign to
+`regs.status`, but `t_regs_sw2hw` has no `status` field — this is a compile error.
+
+The generator in `ipcore_project_generator.py` (line 213) already computes `is_hw2sw`
+correctly via `AccessType.normalize()`, but the package template ignores this flag and
+re-derives membership from raw strings.
+
+**Impact:**
+- A register map where `STATUS` has top-level `access: write-1-to-clear` (rather than
+  field-level access on sub-fields) produces uncompilable VHDL.
+- With field-level W1C, the parent register's access is usually `read-write` or absent,
+  so the bug does not surface in simple examples.  It lurks until a user writes a
+  flat W1C register (e.g., a 32-bit interrupt-status word with no named sub-fields).
+
+**Fix:**
+
+Replace the string-literal filters with the generator-computed `hw2sw` flag AND extend
+`sw2hw_regs` to include W1C registers (since the register file stores their value):
+
+```jinja
+{# Registers where SW writes (control + W1C) → stored in register file, output to core #}
+{% set sw2hw_regs = registers | selectattr('access', 'in',
+    ['read-write', 'write-only', 'rw', 'wo',
+     'write-1-to-clear', 'rw1c', 'w1c',
+     'read-write-1-to-clear']) | list %}
+
+{# Registers where HW writes (status + W1C) → hardware drives the value #}
+{% set hw2sw_regs = registers | selectattr('hw2sw', 'equalto', true) | list %}
+```
+
+The `hw2sw` key is already populated in each register dict by the generator.
+This also removes the string-duplication problem that IMP-1 / TASK-05 targeted.
+
+**Verification:**
+- Create a register map with a flat `access: write-1-to-clear` register (no sub-fields)
+- Run `ipcraft generate` and confirm the package compiles without errors
+- Verify the register appears in `t_regs_sw2hw` in the package
+- Write 0xFF, read 0xFF; write 0x02 (W1C), read 0xFD
+
+---
+
+#### ~~BUG-C: Stale Linear Addressing in `bus_axil.vhdl.j2` Header Comment~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/bus_axil.vhdl.j2` (lines ~6–8)
+
+**Severity: Low — cosmetic, but confusing**
+
+```jinja
+{% for reg in registers %}
+--   {{ "0x%04X" | format(loop.index0 * reg_width) }} : {{ reg.name }} ({{ reg.access }})
+{% endfor %}
+```
+
+`loop.index0 * reg_width` is the old sequential addressing.  After TASK-02 fixed the
+`reg_addr()` function and VHDL package, this banner comment still shows wrong addresses
+for sparse maps.  A developer reading the generated file would see a comment that
+contradicts the actual register file.
+
+**Fix:**
+
+```jinja
+{% for reg in registers %}
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+--   0x{{ '%04X' | format(reg.offset + i * reg.stride) }} : {{ reg.name | upper }}_{{ i }} ({{ reg.access }})
+{% endfor %}
+{% else %}
+--   0x{{ '%04X' | format(reg.offset) }} : {{ reg.name | upper }} ({{ reg.access }})
+{% endif %}
+{% endfor %}
+```
+
+---
+
+### Important Improvements
+
+#### ~~IMP-A: W1C Dual-Assignment Synthesis Concern~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/register_file.vhdl.j2` (write process)
+
+The current W1C write pattern makes two sequential signal assignments to the same record
+in the same process:
+
+```vhdl
+regs.status <= to_status(v_wdata);                          -- (1) whole-record assign
+regs.status.overflow <= regs.status.overflow and not wr_data(1);  -- (2) field override
+```
+
+Per IEEE Std 1076-2008 §8.5, the last assignment to any given sub-element wins.
+Assignment (2) is to a *sub-element* of `regs.status` and takes precedence for that
+bit.  This is correct in simulation and in VHDL-2008-compliant synthesis tools.
+
+However, Synopsys DC and older Quartus versions may emit "multiple drivers" or
+"last assignment wins" warnings for this pattern, and some linting tools (SpyGlass,
+Ascent Lint) will flag it as a rule violation even though it is LRM-correct.
+
+**Recommended fix — variable-based approach:**
+
+```vhdl
+when t_reg_id'pos(REG_STATUS) =>
+  v_wdata := apply_wstrb(to_slv(regs.status), wr_data, wr_strb);
+  v_reg   := to_status(v_wdata);
+  -- Override W1C fields: clear bits where SW writes '1'
+  v_reg.overflow := regs.status.overflow and not wr_data(1);
+  regs.status <= v_reg;  -- single assignment
+```
+
+This makes one assignment per register, is lint-clean, and synthesises identically.
+Requires a per-register variable declaration (`v_reg`) in the process declarative
+region — the template can generate this.
+
+---
+
+#### ~~IMP-B: `cocotb_makefile.j2` PYTHONPATH Hard-Codes Four Directory Levels~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/cocotb_makefile.j2` (line ~61)
+
+```makefile
+export PYTHONPATH := $(shell cd $(CURDIR)/../../../.. && pwd):$(PYTHONPATH)
+```
+
+This path walks four levels up: `tb/ → <name>/ → <project>/ → <workspace>/`.  It
+matches the layout of the ipcraft examples directory but breaks for any other project
+structure.  The original review noted this; the fix was not yet applied.
+
+**Better approaches (in priority order):**
+
+1. **Detect installed package first:** `python -c "import ipcraft" 2>/dev/null && echo
+   "installed"`.  If importable, no PYTHONPATH needed.
+2. **Environment variable override:** `IPCRAFT_ROOT ?= $(shell cd ... && pwd)` with a
+   clear comment telling the user to override it.
+3. **Pass path from generator:** `ipcore_project_generator.py` knows where it lives;
+   it can inject the correct absolute path into the template context.
+
+Option 3 is the cleanest because it eliminates the hard-coded level count entirely.
+
+---
+
+#### ~~IMP-C: Cocotb Testbench Uses `dir()` for Register Discovery~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/cocotb_test.py.j2`
+
+```python
+for block_name in dir(driver):
+    if block_name.startswith('_'):
+        continue
+```
+
+`dir()` returns all attributes, including methods, properties, and dunder-adjacent
+names that don't start with `_`.  This is fragile and will spuriously iterate over any
+public method or class attribute added to the driver in the future.
+
+The `ipcraft.driver` module's `load_driver()` returns an object wrapping address
+blocks.  The driver should expose a `_blocks` or `__registers__` iterable that the
+generated testbench iterates instead of relying on `dir()`.  This is a driver API
+improvement, but the testbench template should be updated in parallel.
+
+---
+
+#### ~~IMP-D: `top.vhdl.j2` Indentation Inconsistency~~ ✅ **Done**
+
+**File:** `ipcraft/generator/hdl/templates/top.vhdl.j2`
+
+The architecture body mixes indentation levels: signal declarations use 2 spaces,
+instantiation labels use 4 spaces, port map contents use 6 spaces.  VHDL is
+whitespace-insensitive, but generated code should be consistently formatted for
+readability and diff cleanliness.
+
+Recommended: 2-space indent throughout (matching the entity template style), or
+standardise on 4-space.  Either is fine; inconsistency is not.
+
+---
+
+### Outstanding Wishlist Items
+
+The following items from the original P0/P1 wishlist and PROP-* proposals remain open.
+They are additive features, not bugs.
+
+| Item | Status | Priority | Notes |
+|------|--------|----------|-------|
+| C/C++ register header (`c_header.h.j2`) | **Open** | P0 | No template exists yet |
+| AXI4-Full burst wrapper template | **Open** | P0 | Bus definition exists, no wrapper |
+| Multi-interface top-level generation | **Partial** | P0 | `secondary_bus_ports` in templates, generator not fully wired |
+| SystemVerilog generator (`.sv.j2`) | **Open** | P1 | Architecture supports it |
+| UVM RAL model generation | **Open** | P1 | High value for verification teams |
+| AXI4-Lite formal PSL properties (PROP-1) | **Open** | P1 | Would be unique in the market |
+| First-class interrupt modeling (PROP-3) | **Open** | P1 | Most-requested register tool feature |
+| Change impact analysis `ipcraft diff` (PROP-5) | **Open** | P1 | Data model ready |
+| Interactive `new` wizard | **Open** | P2 | Quality-of-life |
+
+---
+
+### Updated Ratings
+
+Incorporating fixes since the first review:
+
+| Area | Previous | Current | Change |
+|------|----------|---------|--------|
+| Model layer (`model/`) | 9/10 | 9/10 | Stable |
+| Generator (`generator/hdl/`) | 7/10 | 8/10 | +1 — enum normalisation, addr width |
+| Templates (`.j2`) | 7/10 | 7/10 | BUG-A and BUG-B new findings hold the score |
+| CLI (`cli.py`) | 8/10 | 8/10 | Stable |
+| Driver (`driver/`) | 8/10 | 8/10 | IMP-C open |
+| Tests | 8/10 | 9/10 | +1 — skipped tests now xfail with reasons |
+| Validators | 8/10 | 8/10 | Stable |
+
+**Overall tool rating: 8.5 / 10** — excellent for AXI-Lite register-map-centric
+designs.  BUG-A (Jinja2 scoping) and BUG-B (W1C record classification) are the only
+remaining blockers before I would call the VHDL output fully production-safe.
+
+---
+
+### New Developer Task Backlog (Round 2)
+
+| Task | File(s) | Priority | Effort |
+|------|---------|----------|--------|
+| TASK-10: Fix Jinja2 `has_wstrb` scoping | `bus_axil.vhdl.j2` | Critical | Low |
+| TASK-11: Fix W1C exclusion from `t_regs_sw2hw` | `package.vhdl.j2` | Critical | Low |
+| TASK-12: Fix header comment addresses | `bus_axil.vhdl.j2` | Low | Trivial |
+| TASK-13: Variable-based W1C write pattern | `register_file.vhdl.j2` | Important | Medium |
+| TASK-14: Fix PYTHONPATH generation strategy | `cocotb_makefile.j2`, generator | Important | Low |
+| TASK-15: Replace `dir()` in testbench discovery | `cocotb_test.py.j2`, driver | Important | Low |
+| TASK-16: Standardise `top.vhdl.j2` indentation | `top.vhdl.j2` | Low | Trivial |
+| TASK-06 (carry-over): C/C++ register header | `c_header.h.j2` (new) | P0 | Medium |

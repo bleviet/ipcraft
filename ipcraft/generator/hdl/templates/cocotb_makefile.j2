@@ -57,8 +57,19 @@ endif
 # Cocotb settings
 export COCOTB_REDUCED_LOG_FMT=1
 
-# Add ipcraft to Python path (go up to workspace root: tb -> led -> examples -> ipcraft-spec -> ipcraft)
-export PYTHONPATH := $(shell cd $(CURDIR)/../../../.. && pwd):$(PYTHONPATH)
+# Add ipcraft to Python path.
+# Priority: IPCRAFT_ROOT env var > Python-introspected install location > fallback warning
+ifeq ($(IPCRAFT_ROOT),)
+  IPCRAFT_ROOT := $(shell python -c \
+    "import ipcraft, os; print(os.path.dirname(os.path.dirname(os.path.abspath(ipcraft.__file__))))" \
+    2>/dev/null)
+endif
+ifneq ($(IPCRAFT_ROOT),)
+  export PYTHONPATH := $(IPCRAFT_ROOT):$(PYTHONPATH)
+else
+  $(warning ipcraft not found on PYTHONPATH and IPCRAFT_ROOT is unset. \
+    Install ipcraft (pip install -e .) or set IPCRAFT_ROOT=/path/to/ipcraft)
+endif
 
 # Default target
 include $(shell cocotb-config --makefiles)/Makefile.sim

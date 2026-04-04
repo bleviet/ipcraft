@@ -7,7 +7,13 @@
 --
 -- Register Map:
 {% for reg in registers %}
---   {{ "0x%04X" | format(loop.index0 * reg_width) }} : {{ reg.name }} ({{ reg.access }})
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+--   0x{{ '%04X' | format(reg.offset + i * reg.stride) }} : {{ reg.name | upper }}_{{ i }} ({{ reg.access }})
+{% endfor %}
+{% else %}
+--   0x{{ '%04X' | format(reg.offset) }} : {{ reg.name | upper }} ({{ reg.access }})
+{% endif %}
 {% endfor %}
 --------------------------------------------------------------------------------
 
@@ -171,14 +177,9 @@ begin
   -- Generate write enable to register bank when both address and data received
   ----------------------------------------------------------------------------
   wr_en   <= write_txn.addr_received and write_txn.data_received;
-{% set has_wstrb = false %}
-{% for port in bus_ports %}
-{% if port.logical_name == 'WSTRB' %}
-{% set has_wstrb = true %}
-{% endif %}
-{% endfor %}
   wr_addr <= axi_awaddr;
   wr_data <= wdata_i;
+  -- has_wstrb is pre-computed by the generator (Jinja2 loop-scope cannot set outer vars)
 {% if has_wstrb %}
   wr_strb <= wstrb_i;
 {% else %}

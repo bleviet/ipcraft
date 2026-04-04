@@ -87,8 +87,10 @@ package {{ entity_name }}_pkg is
   ----------------------------------------------------------------------------
   -- Aggregate Register Records (for clean port interface)
   ----------------------------------------------------------------------------
-{% set sw2hw_regs = registers | selectattr('access', 'in', ['read-write', 'write-only', 'rw', 'wo']) | list %}
-{% set hw2sw_regs = registers | selectattr('access', 'in', ['read-only', 'ro']) | list %}
+{% set sw2hw_regs = registers | selectattr('access', 'in', [
+    'read-write', 'write-only', 'rw', 'wo',
+    'write-1-to-clear', 'rw1c', 'w1c', 'read-write-1-to-clear']) | list %}
+{% set hw2sw_regs = registers | selectattr('hw2sw', 'equalto', true) | list %}
 {% if sw2hw_regs %}
 
   -- SW -> HW: Registers written by software, read by hardware

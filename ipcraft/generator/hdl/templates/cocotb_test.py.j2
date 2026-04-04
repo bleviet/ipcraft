@@ -43,16 +43,11 @@ async def test_register_access(dut):
     # 4. Test register discovery
     dut._log.info("Discovering registers...")
 
-    for block_name in dir(driver):
-        if block_name.startswith('_'):
-            continue
+    for block_name in driver._blocks:
         block = getattr(driver, block_name)
-
         dut._log.info(f"Block: {block_name}")
 
-        for reg_name in dir(block):
-            if reg_name.startswith('_'):
-                continue
+        for reg_name in block._registers:
             reg = getattr(block, reg_name)
 
             # Check for Register Array
@@ -80,15 +75,11 @@ async def test_register_access(dut):
         except Exception as e:
             dut._log.warning(f"  {name}: {e}")
 
-    # Iterate over all blocks and registers
-    for block_name in dir(driver):
-        if block_name.startswith('_'):
-            continue
+    # Iterate over all blocks and registers using structured _blocks/_registers lists
+    for block_name in driver._blocks:
         block = getattr(driver, block_name)
 
-        for reg_name in dir(block):
-            if reg_name.startswith('_'):
-                continue
+        for reg_name in block._registers:
             reg = getattr(block, reg_name)
 
             # Standard Register
@@ -127,14 +118,14 @@ async def test_field_access(dut):
 
     # Test first available register with fields
     tested = False
-    for block_name in dir(driver):
-        if block_name.startswith('_') or tested:
-            continue
+    for block_name in driver._blocks:
+        if tested:
+            break
         block = getattr(driver, block_name)
 
-        for reg_name in dir(block):
-            if reg_name.startswith('_') or tested:
-                continue
+        for reg_name in block._registers:
+            if tested:
+                break
             reg = getattr(block, reg_name)
 
             if hasattr(reg, '_fields') and reg._fields:
