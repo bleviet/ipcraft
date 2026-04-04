@@ -500,6 +500,14 @@ class IpCoreProjectGenerator(
         context = self._get_template_context(ip_core)
         return template.render(**context)
 
+    def generate_regmap_docs(self, ip_core: IpCore) -> str:
+        """Generate Markdown register-map documentation."""
+        template = self.env.get_template("regmap_docs.md.j2")
+        context = self._get_template_context(ip_core)
+        context["description"] = ip_core.description or ""
+        context["entity_name"] = ip_core.vlnv.name
+        return template.render(**context)
+
     def dump_context(self, ip_core: IpCore, bus_type: str = "axil") -> str:
         """Dump the template context to a JSON string for discovery."""
         context = self._get_template_context(ip_core, bus_type)
@@ -522,6 +530,7 @@ class IpCoreProjectGenerator(
         vendor: str = "none",
         include_testbench: bool = False,
         dump_context: bool = False,
+        include_docs: bool = False,
     ) -> Dict[str, str]:
         """
         Generate all VHDL files for the IP core.
@@ -540,7 +549,8 @@ class IpCoreProjectGenerator(
         """
         if structured:
             return self.generate_all_with_structure(
-                ip_core, bus_type, include_regs, vendor, include_testbench, dump_context
+                ip_core, bus_type, include_regs, vendor, include_testbench,
+                dump_context, include_docs
             )
 
         name = ip_core.vlnv.name.lower()
@@ -555,6 +565,9 @@ class IpCoreProjectGenerator(
         if include_regs:
             files[f"{name}_regs.vhd"] = self.generate_register_file(ip_core)
 
+        if include_docs:
+            files[f"{name}_regmap.md"] = self.generate_regmap_docs(ip_core)
+
         if dump_context:
             files["template_context.json"] = self.dump_context(ip_core, bus_type)
 
@@ -568,6 +581,7 @@ class IpCoreProjectGenerator(
         vendor: str = "none",
         include_testbench: bool = False,
         dump_context: bool = False,
+        include_docs: bool = False,
     ) -> Dict[str, str]:
         """
         Generate all files with organized folder structure (VSCode extension compatible).
@@ -597,6 +611,10 @@ class IpCoreProjectGenerator(
 
         if include_regs:
             files[f"rtl/{name}_regs.vhd"] = self.generate_register_file(ip_core)
+
+        # Documentation files
+        if include_docs:
+            files[f"docs/{name}_regmap.md"] = self.generate_regmap_docs(ip_core)
 
         # Testbench files
         if include_testbench:

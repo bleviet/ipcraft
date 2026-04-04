@@ -1,0 +1,90 @@
+# {{ entity_name }} Register Map
+
+{% if description %}{{ description }}
+
+{% endif %}
+Address width: {{ addr_width }} bits | Data width: {{ data_width }} bits
+{% if registers %}
+
+## Register Summary
+
+| Offset | Name | Access | Reset | Description |
+|--------|------|--------|-------|-------------|
+{% for reg in registers %}
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+| `0x{{ '%04X' | format(reg.offset + i * reg.stride) }}` | `{{ reg.name | upper }}_{{ i }}` | {{ reg.access | upper }} | `0x{{ '%08X' | format(reg.reset_value) }}` | {{ reg.description }} |
+{% endfor %}
+{% else %}
+| `0x{{ '%04X' | format(reg.offset) }}` | `{{ reg.name | upper }}` | {{ reg.access | upper }} | `0x{{ '%08X' | format(reg.reset_value) }}` | {{ reg.description }} |
+{% endif %}
+{% endfor %}
+
+---
+
+## Register Details
+
+{% for reg in registers %}
+{% if reg.is_array %}
+{% for i in range(reg.count) %}
+### `{{ reg.name | upper }}_{{ i }}` (0x{{ '%04X' | format(reg.offset + i * reg.stride) }})
+
+**Access:** {{ reg.access | upper }} | **Reset:** `0x{{ '%08X' | format(reg.reset_value) }}`
+{% if reg.description %}
+
+{{ reg.description }}
+{% endif %}
+{% if reg.fields %}
+
+| Bits | Field | Access | Reset | Description |
+|------|-------|--------|-------|-------------|
+{% for field in reg.fields %}
+{% set mask = (2 ** field.width) - 1 %}
+{% set field_reset = (reg.reset_value // (2 ** field.offset)) % (mask + 1) %}
+{% if field.width == 1 %}
+| `[{{ field.offset }}]` | `{{ field.name | upper }}` | {{ field.access | upper }} | {{ field_reset }} | {{ field.description }} |
+{% else %}
+| `[{{ field.offset + field.width - 1 }}:{{ field.offset }}]` | `{{ field.name | upper }}` | {{ field.access | upper }} | {{ field_reset }} | {{ field.description }} |
+{% endif %}
+{% endfor %}
+{% else %}
+
+*No named fields - treated as a single {{ data_width }}-bit value.*
+{% endif %}
+
+---
+
+{% endfor %}
+{% else %}
+### `{{ reg.name | upper }}` (0x{{ '%04X' | format(reg.offset) }})
+
+**Access:** {{ reg.access | upper }} | **Reset:** `0x{{ '%08X' | format(reg.reset_value) }}`
+{% if reg.description %}
+
+{{ reg.description }}
+{% endif %}
+{% if reg.fields %}
+
+| Bits | Field | Access | Reset | Description |
+|------|-------|--------|-------|-------------|
+{% for field in reg.fields %}
+{% set mask = (2 ** field.width) - 1 %}
+{% set field_reset = (reg.reset_value // (2 ** field.offset)) % (mask + 1) %}
+{% if field.width == 1 %}
+| `[{{ field.offset }}]` | `{{ field.name | upper }}` | {{ field.access | upper }} | {{ field_reset }} | {{ field.description }} |
+{% else %}
+| `[{{ field.offset + field.width - 1 }}:{{ field.offset }}]` | `{{ field.name | upper }}` | {{ field.access | upper }} | {{ field_reset }} | {{ field.description }} |
+{% endif %}
+{% endfor %}
+{% else %}
+
+*No named fields - treated as a single {{ data_width }}-bit value.*
+{% endif %}
+
+---
+
+{% endif %}
+{% endfor %}
+{% else %}
+*This IP core has no memory-mapped registers.*
+{% endif %}

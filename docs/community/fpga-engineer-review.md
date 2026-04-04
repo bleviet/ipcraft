@@ -1164,7 +1164,7 @@ Add `--c-header` / `--no-c-header` CLI flags.
 
 ---
 
-### TASK-07 -- Register map documentation template
+### ~~TASK-07 -- Register map documentation template~~ ✅ **Done**
 
 **Priority:** P0
 **File (new):** `ipcraft/generator/hdl/templates/regmap_docs.md.j2`
