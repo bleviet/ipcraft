@@ -289,6 +289,72 @@ class IpYamlGenerator:
             "description": bus.description or "",
         }
 
+    def generate_from_model(self, ip_core) -> str:
+        """Generate .ip.yml YAML directly from an already-parsed IpCore.
+
+        Unlike :meth:`generate`, this method accepts an IpCore that has already
+        been built by any parser (VHDL, Verilog, HwTcl, IpXact) and converts it
+        to YAML without re-parsing any source file.
+
+        Args:
+            ip_core: Populated :class:`~ipcraft.model.IpCore` instance.
+
+        Returns:
+            YAML string suitable for writing to a ``.ip.yml`` file.
+        """
+        data: Dict[str, Any] = {
+            "vlnv": {
+                "vendor":  ip_core.vlnv.vendor,
+                "library": ip_core.vlnv.library,
+                "name":    ip_core.vlnv.name,
+                "version": ip_core.vlnv.version,
+            },
+            "description": ip_core.description or f"IP core {ip_core.vlnv.name}",
+        }
+
+        if ip_core.clocks:
+            data["clocks"] = [
+                {"name": c.name, "description": c.description or ""}
+                for c in ip_core.clocks
+            ]
+
+        if ip_core.resets:
+            data["resets"] = [
+                {
+                    "name": r.name,
+                    "polarity": r.polarity.value,
+                    "description": r.description or "",
+                }
+                for r in ip_core.resets
+            ]
+
+        if ip_core.ports:
+            data["ports"] = [self._port_to_dict(p) for p in ip_core.ports]
+
+        if ip_core.bus_interfaces:
+            data["busInterfaces"] = [
+                self._bus_interface_to_dict(b) for b in ip_core.bus_interfaces
+            ]
+
+        if ip_core.parameters:
+            data["parameters"] = [
+                self._parameter_to_dict(p) for p in ip_core.parameters
+            ]
+
+        if ip_core.file_sets:
+            data["fileSets"] = [
+                {
+                    "name": fs.name,
+                    "description": fs.description or "",
+                    "files": [{"path": str(f.path), "type": f.type.value} for f in fs.files],
+                }
+                for fs in ip_core.file_sets
+            ]
+
+        return yaml.dump(
+            data, default_flow_style=False, sort_keys=False, allow_unicode=True
+        )
+
 
 def main():
     """CLI entry point."""

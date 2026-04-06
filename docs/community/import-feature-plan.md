@@ -1,8 +1,8 @@
-# Import Feature — Implementation Plan
+# Parse Feature — Implementation Plan
 
 **Author:** Community / FPGA User  
 **Status:** Proposal  
-**Target command:** `ipcraft import`
+**Target command:** `ipcraft parse`
 
 ---
 
@@ -18,7 +18,7 @@ vendor-native formats:
 | Xilinx Vivado IP | `component.xml` (IP-XACT) | Vivado IP Packager |
 
 ipcraft can already _generate_ `_hw.tcl` and `component.xml` from a `.ip.yml`.
-The reverse path — **importing** those formats and producing `.ip.yml` + optional
+The reverse path — **parsing** those formats and producing `.ip.yml` + optional
 `.mm.yml` — does not yet exist.
 
 This document is a detailed implementation plan for that reverse path.
@@ -30,19 +30,19 @@ This document is a detailed implementation plan for that reverse path.
 ```
 As an FPGA engineer migrating a legacy VHDL IP to ipcraft,
 I want to run:
-  ipcraft import uart_core.vhd
+  ipcraft parse uart_core.vhd
 and get uart_core.ip.yml generated automatically,
 so that I can start regenerating and managing the IP from a single source of truth.
 
 As an Intel/Altera user who already has a Platform Designer _hw.tcl,
 I want to run:
-  ipcraft import uart_core_hw.tcl --mm
+  ipcraft parse uart_core_hw.tcl --mm
 and get both uart_core.ip.yml and uart_core.mm.yml,
 so that I don't have to re-describe a design I've already completed.
 
 As a Xilinx/AMD Vivado user who has packaged an IP with the IP Packager,
 I want to run:
-  ipcraft import component.xml --mm
+  ipcraft parse component.xml --mm
 and get both .ip.yml and .mm.yml,
 so that I can manage the IP with ipcraft going forward.
 ```
@@ -52,7 +52,7 @@ so that I can manage the IP with ipcraft going forward.
 ## 3. Scope
 
 ### In scope
-- `ipcraft import <file>` — auto-detect format from extension / content
+- `ipcraft parse <file>` — auto-detect format from extension / content
 - Source formats: `.vhd`, `.v`, `_hw.tcl`, `component.xml`
 - Output: `.ip.yml` (always) + `.mm.yml` (optional via `--mm` flag)
 - VLNV metadata can be supplied on the command line to override discovered values
@@ -63,7 +63,7 @@ so that I can manage the IP with ipcraft going forward.
 - SystemVerilog (`.sv`) parsing
 - IP-XACT 2009 / 2014 full schema validation
 - Register field semantic inference (e.g., field meaning from comments)
-- Automatic testbench generation at import time
+- Automatic testbench generation at parse time
 
 ---
 
@@ -85,7 +85,7 @@ ipcraft/generator/yaml/
 ```
 
 `ipcraft parse <vhd>` already covers the VHDL → `.ip.yml` path.
-The new `ipcraft import` command will supersede and extend it.
+The `ipcraft parse` command will be extended to also handle `_hw.tcl` and `component.xml`.
 
 ### 4.2 New pieces to build
 
@@ -94,7 +94,7 @@ ipcraft/parser/vendor/           ← NEW package
 ├── __init__.py
 ├── hw_tcl_parser.py             ← Intel _hw.tcl → IpCore
 ├── ipxact_parser.py             ← Xilinx component.xml (IP-XACT) → IpCore
-└── import_dispatcher.py         ← auto-detect format, dispatch to parser
+└── parse_dispatcher.py          ← auto-detect format, dispatch to parser
 
 ipcraft/generator/yaml/
 └── mm_yaml_generator.py         ← IpCore + discovered regs → .mm.yml YAML text (NEW)
@@ -104,11 +104,11 @@ ipcraft/generator/yaml/
 
 ```
  ┌──────────────────────────────────────────────────────────────────────┐
- │  User runs: ipcraft import <file> [--mm] [--vendor v] [--output dir] │
+ │  User runs: ipcraft parse <file> [--mm] [--vendor v] [--output dir]  │
  └──────────────────────────────────────────────────────────────────────┘
                                  │
                     ┌────────────▼────────────┐
-                    │  ImportDispatcher        │
+                    │  ParseDispatcher         │
                     │  detect_format(file)     │
                     └────────────┬────────────┘
               ┌──────────────────┼──────────────────────┐
@@ -147,7 +147,7 @@ ipcraft/generator/yaml/
 ### 5.1 Command signature
 
 ```
-ipcraft import <input>
+ipcraft parse <input>
               [--output <dir>]          # default: same directory as input file
               [--mm]                    # also generate .mm.yml skeleton
               [--vendor <v>]            # override discovered vendor
@@ -165,32 +165,32 @@ ipcraft import <input>
 
 ```bash
 # From a single VHDL entity
-$ ipcraft import my_uart.vhd
+$ ipcraft parse my_uart.vhd
 ✓ Detected format: VHDL
 ✓ Detected bus:    none (standalone)
 ✓ Written: my_uart.ip.yml
 
 # Intel Platform Designer
-$ ipcraft import my_uart_hw.tcl --mm --vendor acme.com
+$ ipcraft parse my_uart_hw.tcl --mm --vendor acme.com
 ✓ Detected format: Intel Platform Designer (_hw.tcl)
 ✓ Detected bus:    Avalon-MM (slave)
 ✓ Written: my_uart.ip.yml
 ✓ Written: my_uart.mm.yml
 
 # Xilinx IP-XACT
-$ ipcraft import component.xml --mm --output ./imported/
+$ ipcraft parse component.xml --mm --output ./imported/
 ✓ Detected format: Xilinx Vivado (IP-XACT component.xml)
 ✓ Detected bus:    AXI4-Lite (slave)
 ✓ Written: imported/my_uart.ip.yml
 ✓ Written: imported/my_uart.mm.yml
 
 # Dry-run preview
-$ ipcraft import component.xml --mm --dry-run
+$ ipcraft parse component.xml --mm --dry-run
 Would write: component_name.ip.yml  (new)
 Would write: component_name.mm.yml  (new)
 
 # JSON output for CI
-$ ipcraft import component.xml --mm --json
+$ ipcraft parse component.xml --mm --json
 {"success": true, "files": ["my_uart.ip.yml", "my_uart.mm.yml"], "format": "ipxact", "bus": "axil"}
 ```
 
@@ -208,15 +208,12 @@ $ ipcraft import component.xml --mm --json
 - `IpYamlGenerator` → produces `.ip.yml` YAML text
 
 **Gap to fill:**
-- `ipcraft parse` is a separate command; `ipcraft import` will unify it with
-  `_hw.tcl` and `component.xml` under one entry point
 - Add `--mm` flag path to generate `.mm.yml` skeleton for discovered bus type
-- The existing `ipcraft parse` command should be kept as an alias pointing to
-  `ipcraft import` to preserve backward compatibility
+- Extend `ipcraft parse` to also handle `_hw.tcl` and `component.xml` via `ParseDispatcher`
 
 **Implementation notes:**
 - Reuse `VHDLParser`, `VerilogParser`, `BusInterfaceDetector` as-is
-- Only new logic: route through `ImportDispatcher` and add `MmYamlGenerator`
+- Only new logic: route through `ParseDispatcher` and add `MmYamlGenerator`
 
 ---
 
@@ -529,7 +526,7 @@ contains a full register map, which translates directly to `.mm.yml`.
 ## 7. New Module: `MmYamlGenerator`
 
 When `--mm` is requested but no register information was discovered (e.g.,
-importing from a VHDL file or a `_hw.tcl` without register elaboration),
+parsing from a VHDL file or a `_hw.tcl` without register elaboration),
 a skeleton `.mm.yml` must be generated from the bus type alone.
 
 **File:** `ipcraft/generator/yaml/mm_yaml_generator.py`
@@ -554,7 +551,7 @@ class MmYamlGenerator:
 
 ```yaml
 # Register map for <name>
-# Generated by ipcraft import — populate with your register definitions
+# Generated by ipcraft parse — populate with your register definitions
 - name: CSR_MAP
   description: Control/Status Register Map
   addressBlocks:
@@ -583,12 +580,12 @@ class MmYamlGenerator:
 
 ---
 
-## 8. New Module: `ImportDispatcher`
+## 8. New Module: `ParseDispatcher`
 
-**File:** `ipcraft/parser/vendor/import_dispatcher.py`
+**File:** `ipcraft/parser/vendor/parse_dispatcher.py`
 
 ```python
-class ImportDispatcher:
+class ParseDispatcher:
     """Detect input format and dispatch to the appropriate parser."""
 
     def detect_format(self, path: Path) -> str:
@@ -618,14 +615,14 @@ class ImportDispatcher:
 
 ## 9. CLI Integration
 
-### 9.1 New subcommand `ipcraft import`
+### 9.1 Extended subcommand `ipcraft parse`
 
-Add `cmd_import` function to `ipcraft/cli.py`:
+Add `cmd_parse` function to `ipcraft/cli.py`:
 
 ```python
-def cmd_import(args):
-    """Import an existing IP description and generate .ip.yml."""
-    dispatcher = ImportDispatcher()
+def cmd_parse(args):
+    """Parse an existing IP description and generate .ip.yml."""
+    dispatcher = ParseDispatcher()
     
     # Detect and parse
     fmt = dispatcher.detect_format(Path(args.input))
@@ -647,7 +644,7 @@ def cmd_import(args):
     
     # Dry-run
     if args.dry_run:
-        _import_dry_run_report(ip_out, mm_out, args.mm, ip_core)
+        _parse_dry_run_report(ip_out, mm_out, args.mm, ip_core)
         return
     
     # Write .ip.yml
@@ -670,11 +667,11 @@ def cmd_import(args):
             print(f"✓ Written: {mm_out}")
 ```
 
-### 9.2 `ipcraft parse` backward compatibility
+### 9.2 Existing `ipcraft parse` integration
 
-The existing `ipcraft parse` subcommand should remain unchanged. Internally it
-can delegate to `ImportDispatcher` for `.vhd` files, or simply continue using
-`IpYamlGenerator` directly — both paths produce the same result.
+The existing `ipcraft parse` subcommand is extended in-place. Internally it
+delegates to `ParseDispatcher` for all supported formats, including the
+existing `.vhd` path which continues to work exactly as before.
 
 ---
 
@@ -684,12 +681,12 @@ can delegate to `ImportDispatcher` for `.vhd` files, or simply continue using
 _Estimated scope: small (mostly wiring existing code)_
 
 - [ ] Create `ipcraft/parser/vendor/__init__.py`
-- [ ] Create `ImportDispatcher` with VHDL / Verilog dispatch only
+- [ ] Create `ParseDispatcher` with VHDL / Verilog dispatch only
 - [ ] Create `MmYamlGenerator` (skeleton output only — no discovered regs yet)
-- [ ] Add `cmd_import` to `cli.py` with VHDL / Verilog support
-- [ ] Add `ipcraft import` to argparse with all flags
-- [ ] Tests: import `.vhd` file, verify `.ip.yml` matches `ipcraft parse` output
-- [ ] Tests: import `.vhd` with `--mm`, verify skeleton `.mm.yml` is valid
+- [ ] Extend `cmd_parse` in `cli.py` with `_hw.tcl` and `component.xml` support
+- [ ] Update `ipcraft parse` argparse with all new flags
+- [ ] Tests: parse `.vhd` file, verify `.ip.yml` output is unchanged
+- [ ] Tests: parse `.vhd` with `--mm`, verify skeleton `.mm.yml` is valid
 
 ### Phase 2 — Intel `_hw.tcl` parser  
 _Estimated scope: medium_
@@ -699,9 +696,9 @@ _Estimated scope: medium_
 - [ ] Map Tcl port directions → ipcraft `PortDirection`
 - [ ] Handle `clock` / `reset` interfaces → `Clock` / `Reset` model objects
 - [ ] Handle `conduit` ports → plain `Port` objects
-- [ ] Wire into `ImportDispatcher`
+- [ ] Wire into `ParseDispatcher`
 - [ ] Tests: parse a real `_hw.tcl` from `ipcraft-spec/examples/` or a synthetic fixture
-- [ ] Tests: import with `--mm`, verify skeleton .mm.yml
+- [ ] Tests: parse with `--mm`, verify skeleton .mm.yml
 
 ### Phase 3 — Xilinx `component.xml` (IP-XACT) parser  
 _Estimated scope: medium-large_
@@ -712,20 +709,20 @@ _Estimated scope: medium-large_
 - [ ] Implement port model extraction (including vector width calculation)
 - [ ] Implement bus interface extraction + `portMaps` resolution
 - [ ] Implement memory map extraction → `MemoryMap` + `Register` + `Field` objects
-- [ ] Wire into `ImportDispatcher`
+- [ ] Wire into `ParseDispatcher`
 - [ ] Wire discovered registers into `MmYamlGenerator.generate()`
 - [ ] Tests: round-trip — generate `component.xml` from a known `.ip.yml`, then
-      import it back, verify the resulting `.ip.yml` matches the original
-- [ ] Tests: import a `component.xml` with registers, verify `.mm.yml` content
+      parse it back, verify the resulting `.ip.yml` matches the original
+- [ ] Tests: parse a `component.xml` with registers, verify `.mm.yml` content
 
 ### Phase 4 — Polish & integration tests  
 _Estimated scope: small_
 
 - [ ] `--dry-run` output (list of files that would be written)
 - [ ] `--json` output format documented and tested
-- [ ] End-to-end test: `ipcraft import component.xml --mm && ipcraft generate *.ip.yml`
-- [ ] Update `docs/user-guide/cli.md` with `import` command documentation
-- [ ] Update `README.md` workflow diagram to include import path
+- [ ] End-to-end test: `ipcraft parse component.xml --mm && ipcraft generate *.ip.yml`
+- [ ] Update `docs/user-guide/cli.md` with `parse` command documentation
+- [ ] Update `README.md` workflow diagram to include parse path
 
 ---
 
@@ -748,10 +745,10 @@ _Estimated scope: small_
 Each parser should have a dedicated test file:
 - `tests/test_hw_tcl_parser.py` — fixture `_hw.tcl` files in `tests/fixtures/`
 - `tests/test_ipxact_parser.py` — fixture `component.xml` files in `tests/fixtures/`
-- `tests/test_import_dispatcher.py` — format detection, dispatch routing
+- `tests/test_parse_dispatcher.py` — format detection, dispatch routing
 
 ### Round-trip integration tests
-The most valuable tests confirm that the import → generate cycle produces
+The most valuable tests confirm that the parse → generate cycle produces
 consistent output:
 ```
 .ip.yml  →  generate_xilinx()  →  component.xml
@@ -781,7 +778,7 @@ tests/fixtures/vendor/
    Tcl procedures that compute parameters, should we skip with a warning, or
    consider optionally invoking `tclsh` if available on PATH?
 
-2. **IP-XACT strict mode** — Should the importer validate against the full
+2. **IP-XACT strict mode** — Should the parser validate against the full
    IP-XACT XSD schema, or parse leniently (best-effort)? Recommendation: lenient
    by default, add `--strict` flag later.
 
@@ -789,9 +786,9 @@ tests/fixtures/vendor/
    clock domains. The current `IpCore` model supports multiple clocks. Ensure the
    mapping preserves this.
 
-4. **`ipcraft parse` deprecation timeline** — Once `ipcraft import` exists and
-   covers `.vhd` files, should `ipcraft parse` be deprecated? Recommendation:
-   keep it as an alias for at least two minor versions.
+4. **Multi-format extension timeline** — `ipcraft parse` currently handles
+   `.vhd` / `.v` files. Adding `_hw.tcl` and `component.xml` support extends
+   the same command — no deprecation needed.
 
 ---
 
@@ -799,13 +796,13 @@ tests/fixtures/vendor/
 
 The feature is complete when all of the following are true:
 
-1. `ipcraft import my_uart.vhd` produces the same output as `ipcraft parse my_uart.vhd`
-2. `ipcraft import my_uart_hw.tcl` produces a valid `.ip.yml` with correct bus
+1. `ipcraft parse my_uart.vhd` continues to produce the same output as before
+2. `ipcraft parse my_uart_hw.tcl` produces a valid `.ip.yml` with correct bus
    interface, clocks, and ports
-3. `ipcraft import component.xml --mm` produces both `.ip.yml` and a `.mm.yml`
+3. `ipcraft parse component.xml --mm` produces both `.ip.yml` and a `.mm.yml`
    populated with registers discovered from the IP-XACT file
-4. A Vivado-generated `component.xml` can be round-tripped: import → generate →
+4. A Vivado-generated `component.xml` can be round-tripped: parse → generate →
    the resulting `component.xml` is structurally equivalent to the original
-5. All four import paths are covered by automated tests
-6. `ipcraft import --help` describes all flags
+5. All four parse paths are covered by automated tests
+6. `ipcraft parse --help` describes all flags
 7. `--json` and `--dry-run` flags work for all formats

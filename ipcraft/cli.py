@@ -422,13 +422,126 @@ def _watch_loop(args, output_base: Path) -> None:
 # Subcommand: parse
 # ---------------------------------------------------------------------------
 
+def _parse_dry_run_report(
+    ip_out: Path, mm_out: Path, write_mm: bool, ip_core
+) -> None:
+    """Print a dry-run preview of what would be written."""
+    status_ip = "(overwrite)" if ip_out.exists() else "(new)"
+    status_mm = "(overwrite)" if mm_out.exists() else "(new)"
+    print(f"Would write: {ip_out}  {status_ip}")
+    if write_mm:
+        print(f"Would write: {mm_out}  {status_mm}")
+
+
+def _safe_write(path: Path, content: str, force: bool, args) -> None:
+    """Write *content* to *path*, respecting --force."""
+    if path.exists() and not force:
+        err(
+            f"Output file already exists: {path}\n"
+            "  Use --force / -f to overwrite.",
+            args,
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+_HDL_EXTENSIONS = {".vhd", ".vhdl", ".v"}
+
+
 def cmd_parse(args):
-    """Parse VHDL file and generate IP core YAML."""
-    vhdl_path = Path(args.input)
+    """Parse an IP description file and generate .ip.yml (and optionally .mm.yml)."""
+    from ipcraft.parser.vendor.parse_dispatcher import ParseDispatcher, ParseFormatError
+    from ipcraft.generator.yaml.mm_yaml_generator import MmYamlGenerator
 
-    if not vhdl_path.exists():
-        err(f"VHDL file not found: {vhdl_path}", args)
+    input_path = Path(args.input)
 
+    if not input_path.exists():
+        err(f"File not found: {input_path}", args)
+
+    # Legacy VHDL-only path: if --output is a plain .yml file and no new flags
+    # are used, fall through to the old single-output behaviour for compatibility.
+    output_arg = getattr(args, "output", None)
+    write_mm   = getattr(args, "mm", False)
+    dry_run    = getattr(args, "dry_run", False)
+
+    # Detect whether we're in legacy mode (output points directly to a .yml file)
+    legacy_mode = (
+        output_arg
+        and not write_mm
+        and not dry_run
+        and Path(output_arg).suffix.lower() in (".yml", ".yaml")
+    )
+
+    if legacy_mode and input_path.suffix.lower() in _HDL_EXTENSIONS:
+        _cmd_parse_legacy(args, input_path, output_arg)
+        return
+
+    try:
+        dispatcher = ParseDispatcher()
+        fmt = dispatcher.detect_format(input_path)
+        log(f"Detected format: {fmt}", args)
+
+        ip_core = dispatcher.parse(
+            input_path,
+            detect_bus=not args.no_detect_bus,
+        )
+
+        # Apply CLI VLNV overrides
+        if any([args.vendor != "user", args.library != "ip", args.version != "1.0"]):
+            from ipcraft.model import VLNV
+            ip_core = ip_core.model_copy(update={
+                "vlnv": VLNV(
+                    vendor=args.vendor if args.vendor != "user" else ip_core.vlnv.vendor,
+                    library=args.library if args.library != "ip" else ip_core.vlnv.library,
+                    name=ip_core.vlnv.name,
+                    version=args.version if args.version != "1.0" else ip_core.vlnv.version,
+                )
+            })
+
+        # Determine output directory
+        if output_arg:
+            output_dir = Path(output_arg)
+            # If caller passed a .yml path directly (shouldn't happen here after
+            # legacy check, but guard anyway)
+            if output_dir.suffix.lower() in (".yml", ".yaml"):
+                output_dir = output_dir.parent
+        else:
+            output_dir = input_path.parent
+
+        ip_out = output_dir / f"{ip_core.vlnv.name.lower()}.ip.yml"
+        mm_out = output_dir / f"{ip_core.vlnv.name.lower()}.mm.yml"
+
+        if dry_run:
+            _parse_dry_run_report(ip_out, mm_out, write_mm, ip_core)
+            return
+
+        # Write .ip.yml
+        ip_yaml = IpYamlGenerator().generate_from_model(ip_core)
+        _safe_write(ip_out, ip_yaml, args.force, args)
+
+        # Write .mm.yml if requested
+        if write_mm:
+            discovered = getattr(ip_core, "_discovered_registers", None)
+            mm_yaml = MmYamlGenerator().generate(ip_core, discovered_regs=discovered)
+            _safe_write(mm_out, mm_yaml, args.force, args)
+
+        if args.json:
+            files = [str(ip_out)] + ([str(mm_out)] if write_mm else [])
+            print(json.dumps({"success": True, "format": fmt, "files": files}))
+        else:
+            print(f"✓ Detected format: {fmt}")
+            print(f"✓ Written: {ip_out}")
+            if write_mm:
+                print(f"✓ Written: {mm_out}")
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        err(f"Parse failed: {e}", args, e)
+
+
+def _cmd_parse_legacy(args, vhdl_path: Path, output_arg: str) -> None:
+    """Original single-file VHDL → .ip.yml behaviour (backward compatible)."""
     try:
         if getattr(args, "verbose", False):
             print(f"Parsing {vhdl_path}...")
@@ -439,16 +552,10 @@ def cmd_parse(args):
             vendor=args.vendor,
             library=args.library,
             version=args.version,
-            memmap_path=Path(args.memmap) if args.memmap else None,
+            memmap_path=Path(args.memmap) if getattr(args, "memmap", None) else None,
         )
 
-        if args.output:
-            output_path = Path(args.output)
-        else:
-            import yaml as yaml_lib
-            data = yaml_lib.safe_load(yaml_content)
-            entity_name = data.get("vlnv", {}).get("name", "output")
-            output_path = vhdl_path.parent / f"{entity_name}.ip.yml"
+        output_path = Path(output_arg)
 
         if output_path.exists() and not args.force:
             err(
@@ -697,12 +804,26 @@ def main():
     # ---- parse ----
     parse_p = subparsers.add_parser(
         "parse",
-        help="Parse a VHDL file and generate an IP core YAML",
+        help="Parse a source file (.vhd, .v, _hw.tcl, component.xml) and generate .ip.yml",
     )
-    parse_p.add_argument("input", help="VHDL source file to parse")
+    parse_p.add_argument(
+        "input",
+        help="Source file to parse (.vhd/.vhdl, .v, _hw.tcl, component.xml)",
+    )
     parse_p.add_argument(
         "--output", "-o",
-        help="Output .ip.yml path (default: {entity_name}.ip.yml beside the input)",
+        help=(
+            "Output directory (default: same directory as input file). "
+            "For VHDL files with a direct .yml path this still works as before."
+        ),
+    )
+    parse_p.add_argument(
+        "--mm", action="store_true",
+        help="Also generate a .mm.yml register-map skeleton alongside the .ip.yml",
+    )
+    parse_p.add_argument(
+        "--dry-run", action="store_true",
+        help="Print which files would be written without writing anything",
     )
     parse_p.add_argument("--vendor", default="user", help="VLNV vendor name (default: user)")
     parse_p.add_argument("--library", default="ip", help="VLNV library name (default: ip)")
@@ -713,11 +834,11 @@ def main():
     )
     parse_p.add_argument(
         "--memmap",
-        help="Path to an existing memory map file to reference in the output YAML",
+        help="Path to an existing memory map file to reference (VHDL legacy mode only)",
     )
     parse_p.add_argument(
         "--force", "-f", action="store_true",
-        help="Overwrite the output file if it already exists",
+        help="Overwrite existing output files",
     )
     parse_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     _add_common_args(parse_p)

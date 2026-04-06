@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spirit:component xmlns:spirit="http://www.spiritconsortium.org/XMLSchema/SPIRIT/1685-2009-06">
+
+  <!-- VLNV -->
+  <spirit:vendor>user</spirit:vendor>
+  <spirit:library>ip</spirit:library>
+  <spirit:name>simple_uart</spirit:name>
+  <spirit:version>1.0</spirit:version>
+  <spirit:description>Simple UART core</spirit:description>
+
+  <!-- Bus interfaces -->
+  <spirit:busInterfaces>
+    <spirit:busInterface>
+      <spirit:name>S_AXI</spirit:name>
+      <spirit:busType spirit:vendor="xilinx.com" spirit:library="interface"
+                      spirit:name="aximm" spirit:version="1.0"/>
+      <spirit:slave/>
+      <spirit:portMaps>
+        <spirit:portMap>
+          <spirit:logicalPort><spirit:name>AWADDR</spirit:name></spirit:logicalPort>
+          <spirit:physicalPort><spirit:name>s_axi_awaddr</spirit:name></spirit:physicalPort>
+        </spirit:portMap>
+        <spirit:portMap>
+          <spirit:logicalPort><spirit:name>AWVALID</spirit:name></spirit:logicalPort>
+          <spirit:physicalPort><spirit:name>s_axi_awvalid</spirit:name></spirit:physicalPort>
+        </spirit:portMap>
+        <spirit:portMap>
+          <spirit:logicalPort><spirit:name>WDATA</spirit:name></spirit:logicalPort>
+          <spirit:physicalPort><spirit:name>s_axi_wdata</spirit:name></spirit:physicalPort>
+        </spirit:portMap>
+        <spirit:portMap>
+          <spirit:logicalPort><spirit:name>RDATA</spirit:name></spirit:logicalPort>
+          <spirit:physicalPort><spirit:name>s_axi_rdata</spirit:name></spirit:physicalPort>
+        </spirit:portMap>
+        <spirit:portMap>
+          <spirit:logicalPort><spirit:name>BRESP</spirit:name></spirit:logicalPort>
+          <spirit:physicalPort><spirit:name>s_axi_bresp</spirit:name></spirit:physicalPort>
+        </spirit:portMap>
+      </spirit:portMaps>
+    </spirit:busInterface>
+  </spirit:busInterfaces>
+
+  <!-- Physical ports -->
+  <spirit:model>
+    <spirit:ports>
+      <spirit:port>
+        <spirit:name>s_axi_awaddr</spirit:name>
+        <spirit:wire>
+          <spirit:direction>in</spirit:direction>
+          <spirit:vector>
+            <spirit:left>11</spirit:left>
+            <spirit:right>0</spirit:right>
+          </spirit:vector>
+        </spirit:wire>
+      </spirit:port>
+      <spirit:port>
+        <spirit:name>s_axi_awvalid</spirit:name>
+        <spirit:wire>
+          <spirit:direction>in</spirit:direction>
+        </spirit:wire>
+      </spirit:port>
+      <spirit:port>
+        <spirit:name>s_axi_wdata</spirit:name>
+        <spirit:wire>
+          <spirit:direction>in</spirit:direction>
+          <spirit:vector>
+            <spirit:left>31</spirit:left>
+            <spirit:right>0</spirit:right>
+          </spirit:vector>
+        </spirit:wire>
+      </spirit:port>
+      <spirit:port>
+        <spirit:name>s_axi_rdata</spirit:name>
+        <spirit:wire>
+          <spirit:direction>out</spirit:direction>
+          <spirit:vector>
+            <spirit:left>31</spirit:left>
+            <spirit:right>0</spirit:right>
+          </spirit:vector>
+        </spirit:wire>
+      </spirit:port>
+      <spirit:port>
+        <spirit:name>s_axi_bresp</spirit:name>
+        <spirit:wire>
+          <spirit:direction>out</spirit:direction>
+          <spirit:vector>
+            <spirit:left>1</spirit:left>
+            <spirit:right>0</spirit:right>
+          </spirit:vector>
+        </spirit:wire>
+      </spirit:port>
+      <spirit:port>
+        <spirit:name>aclk</spirit:name>
+        <spirit:wire>
+          <spirit:direction>in</spirit:direction>
+        </spirit:wire>
+      </spirit:port>
+      <spirit:port>
+        <spirit:name>aresetn</spirit:name>
+        <spirit:wire>
+          <spirit:direction>in</spirit:direction>
+        </spirit:wire>
+      </spirit:port>
+      <spirit:port>
+        <spirit:name>txd</spirit:name>
+        <spirit:wire>
+          <spirit:direction>out</spirit:direction>
+        </spirit:wire>
+      </spirit:port>
+      <spirit:port>
+        <spirit:name>rxd</spirit:name>
+        <spirit:wire>
+          <spirit:direction>in</spirit:direction>
+        </spirit:wire>
+      </spirit:port>
+    </spirit:ports>
+  </spirit:model>
+
+  <!-- Parameters -->
+  <spirit:parameters>
+    <spirit:parameter>
+      <spirit:name>C_S_AXI_DATA_WIDTH</spirit:name>
+      <spirit:value>32</spirit:value>
+    </spirit:parameter>
+    <spirit:parameter>
+      <spirit:name>C_S_AXI_ADDR_WIDTH</spirit:name>
+      <spirit:value>12</spirit:value>
+    </spirit:parameter>
+  </spirit:parameters>
+
+  <!-- Memory maps -->
+  <spirit:memoryMaps>
+    <spirit:memoryMap>
+      <spirit:name>S_AXI_reg</spirit:name>
+      <spirit:addressBlock>
+        <spirit:name>reg0</spirit:name>
+        <spirit:baseAddress>0</spirit:baseAddress>
+        <spirit:width>32</spirit:width>
+        <spirit:register>
+          <spirit:name>CTRL</spirit:name>
+          <spirit:addressOffset>0x0</spirit:addressOffset>
+          <spirit:size>32</spirit:size>
+          <spirit:description>Control register</spirit:description>
+          <spirit:field>
+            <spirit:name>ENABLE</spirit:name>
+            <spirit:bitOffset>0</spirit:bitOffset>
+            <spirit:bitWidth>1</spirit:bitWidth>
+            <spirit:access>read-write</spirit:access>
+            <spirit:description>Global enable</spirit:description>
+          </spirit:field>
+          <spirit:field>
+            <spirit:name>LOOPBACK</spirit:name>
+            <spirit:bitOffset>1</spirit:bitOffset>
+            <spirit:bitWidth>1</spirit:bitWidth>
+            <spirit:access>read-write</spirit:access>
+          </spirit:field>
+        </spirit:register>
+        <spirit:register>
+          <spirit:name>STATUS</spirit:name>
+          <spirit:addressOffset>0x4</spirit:addressOffset>
+          <spirit:size>32</spirit:size>
+          <spirit:description>Status register</spirit:description>
+          <spirit:field>
+            <spirit:name>TX_BUSY</spirit:name>
+            <spirit:bitOffset>0</spirit:bitOffset>
+            <spirit:bitWidth>1</spirit:bitWidth>
+            <spirit:access>read-only</spirit:access>
+          </spirit:field>
+          <spirit:field>
+            <spirit:name>RX_VALID</spirit:name>
+            <spirit:bitOffset>1</spirit:bitOffset>
+            <spirit:bitWidth>1</spirit:bitWidth>
+            <spirit:access>read-only</spirit:access>
+          </spirit:field>
+        </spirit:register>
+      </spirit:addressBlock>
+    </spirit:memoryMap>
+  </spirit:memoryMaps>
+
+</spirit:component>
