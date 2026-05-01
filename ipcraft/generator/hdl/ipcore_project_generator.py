@@ -438,7 +438,14 @@ class IpCoreProjectGenerator(
                     secondary_bus_ports.extend(active_ports)
 
         max_addr = max((r["offset"] + r.get("stride", 4) * r.get("count", 1)) for r in registers) if registers else 16
-        calc_addr_width = max(max_addr.bit_length(), 4)
+        calc_addr_width = max((max_addr - 1).bit_length() if max_addr > 0 else 0, 4)
+        for p in bus_ports:
+            if p.get("logical_name") in ["AWADDR", "ARADDR", "address"]:
+                try:
+                    calc_addr_width = int(p.get("width", calc_addr_width))
+                except ValueError:
+                    pass
+                break
 
         # Pre-compute boolean flags to avoid Jinja2 block-scoping surprises.
         # (Jinja2 {% set %} inside {% for %} does not propagate to outer scope.)
