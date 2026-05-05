@@ -54,25 +54,15 @@ class IpCoreValidator:
 
     def validate_unique_names(self) -> None:
         """Check for duplicate names within each category."""
-        # Check clocks
-        clock_names = [c.name for c in self.ip_core.clocks]
-        self._check_duplicates(clock_names, "clock")
-
-        # Check resets
-        reset_names = [r.name for r in self.ip_core.resets]
-        self._check_duplicates(reset_names, "reset")
-
-        # Check ports
-        port_names = [p.name for p in self.ip_core.ports]
-        self._check_duplicates(port_names, "port")
-
-        # Check bus interfaces
-        bus_names = [b.name for b in self.ip_core.bus_interfaces]
-        self._check_duplicates(bus_names, "bus_interface")
-
-        # Check memory maps
-        mm_names = [mm.name for mm in self.ip_core.memory_maps]
-        self._check_duplicates(mm_names, "memory_map")
+        categories = [
+            (self.ip_core.clocks, "clock"),
+            (self.ip_core.resets, "reset"),
+            (self.ip_core.ports, "port"),
+            (self.ip_core.bus_interfaces, "bus_interface"),
+            (self.ip_core.memory_maps, "memory_map"),
+        ]
+        for items, category in categories:
+            self._check_duplicates([item.name for item in items], category)
 
     def _check_duplicates(self, names: List[str], category: str) -> None:
         """Check for duplicate names in a list."""
@@ -147,29 +137,23 @@ class IpCoreValidator:
         end2 = reg2.address_offset + size2_bytes
         return not (end1 <= reg2.address_offset or end2 <= reg1.address_offset)
 
+    def _warn_missing_association(self, bus_name: str, signal_type: str) -> None:
+        self.warnings.append(
+            ValidationError(
+                severity="warning",
+                message=f"Bus interface '{bus_name}' has no associated {signal_type}",
+                location=f"bus_interface:{bus_name}",
+                suggestion=f"Consider associating with a {signal_type} for clarity",
+            )
+        )
+
     def validate_bus_interfaces(self) -> None:
         """Validate bus interface configuration."""
         for bus in self.ip_core.bus_interfaces:
-            # Warn if no clock/reset association
             if not bus.associated_clock:
-                self.warnings.append(
-                    ValidationError(
-                        severity="warning",
-                        message=f"Bus interface '{bus.name}' has no associated clock",
-                        location=f"bus_interface:{bus.name}",
-                        suggestion="Consider associating with a clock for clarity",
-                    )
-                )
-
+                self._warn_missing_association(bus.name, "clock")
             if not bus.associated_reset:
-                self.warnings.append(
-                    ValidationError(
-                        severity="warning",
-                        message=f"Bus interface '{bus.name}' has no associated reset",
-                        location=f"bus_interface:{bus.name}",
-                        suggestion="Consider associating with a reset for clarity",
-                    )
-                )
+                self._warn_missing_association(bus.name, "reset")
 
             # Check memory map reference for slave interfaces
             if bus.is_slave and not bus.memory_map_ref:

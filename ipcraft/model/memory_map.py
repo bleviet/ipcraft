@@ -20,6 +20,20 @@ from ipcraft.utils import parse_bit_range
 
 from .base import FlexibleModel, StrictModel
 
+_RANGE_SUFFIX_MULTIPLIERS = {"K": 1024, "M": 1024**2, "G": 1024**3}
+
+
+def _parse_range_bytes(range_val: Union[int, str, None]) -> int:
+    """Convert an address range value (int, suffix string, or None) to bytes."""
+    if range_val is None:
+        return 0
+    if isinstance(range_val, int):
+        return range_val
+    suffix = range_val[-1].upper()
+    if suffix in _RANGE_SUFFIX_MULTIPLIERS:
+        return int(range_val[:-1]) * _RANGE_SUFFIX_MULTIPLIERS[suffix]
+    return int(range_val)
+
 if TYPE_CHECKING:
     from ipcraft.runtime.register import AbstractBusInterface
 
@@ -364,22 +378,7 @@ class AddressBlock(FlexibleModel):
     @cached_property
     def end_address(self) -> int:
         """Calculate end address of the block."""
-        range_val = self.range
-        if isinstance(range_val, str):
-            # Simple parsing for common suffixes
-            suffix = range_val[-1].upper()
-            if suffix == "K":
-                range_val = int(range_val[:-1]) * 1024
-            elif suffix == "M":
-                range_val = int(range_val[:-1]) * 1024 * 1024
-            elif suffix == "G":
-                range_val = int(range_val[:-1]) * 1024 * 1024 * 1024
-            else:
-                range_val = int(range_val)
-
-        # Default to 0 size if None (though parser provides default)
-        size = range_val if range_val is not None else 0
-        return self.base_address + size
+        return self.base_address + _parse_range_bytes(self.range)
 
     def contains_address(self, address: int) -> bool:
         """Check if address is within this block."""

@@ -7,7 +7,7 @@ from the bus_definitions/ directory.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 import yaml
 
@@ -39,6 +39,13 @@ class BusLibraryNotFoundError(BusLibraryError, FileNotFoundError):
     pass
 
 
+class PortDict(TypedDict):
+    name: str
+    direction: Optional[str]
+    width: Optional[int]
+    presence: str
+
+
 @dataclass
 class PortDefinition:
     """Definition of a bus port."""
@@ -55,6 +62,14 @@ class PortDefinition:
     @property
     def is_optional(self) -> bool:
         return self.presence == "optional"
+
+    def to_dict(self) -> PortDict:
+        return {
+            "name": self.name,
+            "direction": self.direction,
+            "width": self.width,
+            "presence": self.presence,
+        }
 
 
 @dataclass
@@ -231,15 +246,7 @@ class BusLibrary:
         }
 
         if include_ports:
-            info["ports"] = [
-                {
-                    "name": p.name,
-                    "direction": p.direction,
-                    "width": p.width,
-                    "presence": p.presence,
-                }
-                for p in defn.ports
-            ]
+            info["ports"] = [p.to_dict() for p in defn.ports]
 
         return info
 
@@ -268,17 +275,7 @@ class BusLibrary:
         for key in self.list_bus_types():
             defn = self.get_bus_definition(key)
             if defn:
-                result[key] = {
-                    "ports": [
-                        {
-                            "name": p.name,
-                            "direction": p.direction,
-                            "width": p.width,
-                            "presence": p.presence,
-                        }
-                        for p in defn.ports
-                    ]
-                }
+                result[key] = {"ports": [p.to_dict() for p in defn.ports]}
         return result
 
     def get_required_ports(self, bus_type: str) -> List[PortDefinition]:
@@ -307,15 +304,7 @@ class BusLibrary:
                 "name": defn.bus_type.name,
                 "version": defn.bus_type.version,
             },
-            "ports": [
-                {
-                    "name": p.name,
-                    "direction": p.direction,
-                    "width": p.width,
-                    "presence": p.presence,
-                }
-                for p in defn.ports
-            ],
+            "ports": [p.to_dict() for p in defn.ports],
         }
 
     def get_all_raw_dicts(self) -> Dict[str, Dict[str, Any]]:
