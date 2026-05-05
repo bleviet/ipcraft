@@ -19,7 +19,6 @@ from ipcraft.model import (
     Clock,
     IpCore,
     Parameter,
-    Polarity,
     Port,
     Reset,
 )
@@ -123,28 +122,17 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
         # Parse file sets (may include imports)
         file_sets = self._parse_file_sets(data.get("fileSets", []), file_path)
 
-        # Create IpCore model - only pass non-empty values to use Pydantic defaults
-        kwargs: Dict[str, Any] = {
-            "vlnv": vlnv,
-        }
-        if description:
-            kwargs["description"] = description
-        if clocks:
-            kwargs["clocks"] = clocks
-        if resets:
-            kwargs["resets"] = resets
-        if ports:
-            kwargs["ports"] = ports
-        if bus_interfaces:
-            kwargs["bus_interfaces"] = bus_interfaces
-        if memory_maps:
-            kwargs["memory_maps"] = memory_maps
-        if parameters:
-            kwargs["parameters"] = parameters
-        if file_sets:
-            kwargs["file_sets"] = file_sets
-
-        return IpCore(**kwargs)
+        return IpCore(
+            vlnv=vlnv,
+            description=description or "",
+            clocks=clocks,
+            resets=resets,
+            ports=ports,
+            bus_interfaces=bus_interfaces,
+            memory_maps=memory_maps,
+            parameters=parameters,
+            file_sets=file_sets,
+        )
 
     def _parse_list(
         self,
@@ -174,16 +162,11 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
 
     def _parse_vlnv(self, data: Dict[str, Any], file_path: Path) -> VLNV:
         """Parse VLNV structure."""
-        required = ["vendor", "library", "name", "version"]
-        for field in required:
-            if field not in data:
-                raise ParseError(f"VLNV missing required field: {field}", file_path)
-
         return VLNV(
-            vendor=data["vendor"],
-            library=data["library"],
-            name=data["name"],
-            version=data["version"],
+            vendor=data.get("vendor", ""),
+            library=data.get("library", ""),
+            name=data.get("name", ""),
+            version=data.get("version", ""),
         )
 
     def _parse_clocks(self, data: List[Dict[str, Any]], file_path: Path) -> List[Clock]:
@@ -209,21 +192,14 @@ class YamlIpCoreParser(MemoryMapParserMixin, FileSetParserMixin):
 
         def build_reset(d):
             polarity_str = d.get("polarity", "activeLow")
-            polarity = (
-                Polarity.ACTIVE_LOW
-                if polarity_str == "activeLow"
-                else Polarity.ACTIVE_HIGH
-            )
-            default_logical = (
-                "RESET_N" if polarity_str in ["activeLow", "active_low"] else "RESET"
-            )
+            default_logical = "RESET_N" if "low" in polarity_str.lower() else "RESET"
             return Reset(
                 **filter_none(
                     {
                         "name": d.get("name"),
                         "logical_name": d.get("logicalName", default_logical),
                         "direction": d.get("direction", "in"),
-                        "polarity": polarity,
+                        "polarity": polarity_str,
                         "description": d.get("description"),
                     }
                 )

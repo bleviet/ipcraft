@@ -66,10 +66,7 @@ class FileSetParserMixin:
         for idx, file_data in enumerate(data):
             try:
                 file_type_str = file_data.get("type", "unknown")
-                try:
-                    file_type = FileType(file_type_str)
-                except ValueError:
-                    file_type = FileType(file_type_str.upper())
+                file_type = FileType(file_type_str)
 
                 managed = file_data.get("managed", True)
                 files.append(

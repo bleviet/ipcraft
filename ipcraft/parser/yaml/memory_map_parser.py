@@ -31,8 +31,7 @@ class MemoryMapParserMixin(ParserHostContext):
         """Build a RegisterDef from parsed data with consistent field mapping.
 
         Centralizes the RegisterDef construction pattern to avoid duplication
-        across _parse_registers, _expand_nested_register_array, and
-        _expand_register_array.
+        across _parse_registers and _expand_register_array.
 
         Args:
             name: Register name.
@@ -245,43 +244,6 @@ class MemoryMapParserMixin(ParserHostContext):
 
         return registers
 
-    def _expand_nested_register_array(
-        self, array_spec: Dict[str, Any], base_offset: int, file_path: Path
-    ) -> List[RegisterDef]:
-        """Expand nested register arrays used in .mm.yml format."""
-        base_name = array_spec.get("name", "REG")
-        count = array_spec.get("count", 1)
-        stride = array_spec.get("stride", 4)
-        sub_registers = array_spec.get("registers", [])
-
-        if not sub_registers:
-            raise ParseError(
-                f"Nested register array '{base_name}' has no sub-registers", file_path
-            )
-
-        registers = []
-        for instance_idx in range(count):
-            instance_offset = base_offset + (instance_idx * stride)
-            for sub_reg in sub_registers:
-                reg_name = f"{base_name}_{instance_idx}_{sub_reg['name']}"
-                final_offset = instance_offset + sub_reg.get("offset", 0)
-                size = sub_reg.get("size", 32)
-                fields = self._parse_bit_fields(sub_reg.get("fields", []), file_path)
-
-                registers.append(
-                    self._build_register_def(
-                        name=reg_name,
-                        address_offset=final_offset,
-                        size=size,
-                        access=sub_reg.get("access", "read-write"),
-                        description=sub_reg.get("description"),
-                        reset_value=sub_reg.get("resetValue"),
-                        fields=fields,
-                    )
-                )
-
-        return registers
-
     def _expand_register_array(
         self, array_spec: Dict[str, Any], start_offset: int, file_path: Path
     ) -> List[RegisterDef]:
@@ -342,9 +304,10 @@ class MemoryMapParserMixin(ParserHostContext):
         for idx, field_data in enumerate(data):
             try:
                 if "bits" in field_data:
-                    bit_offset, bit_width = self._parse_bits_notation(
-                        field_data["bits"]
-                    )
+                    try:
+                        bit_offset, bit_width = parse_bit_range(field_data["bits"])
+                    except ValueError as e:
+                        raise ValueError(f"Failed to parse bits notation '{field_data['bits']}': {e}")
                 else:
                     bit_offset = field_data.get("bitOffset")
                     bit_width = field_data.get("bitWidth", 1)
@@ -377,9 +340,4 @@ class MemoryMapParserMixin(ParserHostContext):
 
         return fields
 
-    def _parse_bits_notation(self, bits_str: str) -> tuple[int, int]:
-        """Parse ``[msb:lsb]`` bits notation into ``(offset, width)``."""
-        try:
-            return parse_bit_range(bits_str)
-        except ValueError as e:
-            raise ValueError(f"Failed to parse bits notation '{bits_str}': {e}")
+
