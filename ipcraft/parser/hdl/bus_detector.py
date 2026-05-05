@@ -15,6 +15,40 @@ from ipcraft.model.bus_library import BusLibrary, get_bus_library
 from ipcraft.model.clock_reset import Clock, Reset
 from ipcraft.model.port import Port, PortDirection
 
+# Minimum fraction of required ports that must be present to claim a bus match
+_REQUIRED_MATCH_THRESHOLD = 0.7
+# How much more a required-port match counts versus an optional-port match in scoring
+_REQUIRED_PORT_SCORE_WEIGHT = 10
+
+# ---------------------------------------------------------------------------
+# Clock / reset name heuristics (matched against port names)
+# ---------------------------------------------------------------------------
+_CLOCK_NAME_RE = re.compile(
+    r"^i?_?clk|^i?_?clock|_clk$|_clock$|^aclk$|^i_clk_",
+    re.IGNORECASE,
+)
+_RESET_NAME_RE = re.compile(
+    r"^i?_?rst|^i?_?reset|_rst$|_reset$|^aresetn?$|^i_rst_n?_",
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# VHDL edge-construct patterns (matched against architecture body text).
+# Each tuple is (compiled_pattern, edge_type).  Group 1 captures the signal name.
+#
+# Supported constructs:
+#   rising_edge(clk)                 — IEEE Std 1076-1993 and later
+#   falling_edge(clk)                — same
+#   clk'event and clk = '1'         — traditional rising-edge (pre-1993 style)
+#   clk'event and clk = '0'         — traditional falling-edge
+# ---------------------------------------------------------------------------
+_VHDL_CLOCK_CONSTRUCTS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\brising_edge\s*\(\s*(\w+)\s*\)", re.IGNORECASE), "rising"),
+    (re.compile(r"\bfalling_edge\s*\(\s*(\w+)\s*\)", re.IGNORECASE), "falling"),
+    (re.compile(r"\b(\w+)'event\s+and\s+\1\s*=\s*'1'", re.IGNORECASE), "rising"),
+    (re.compile(r"\b(\w+)'event\s+and\s+\1\s*=\s*'0'", re.IGNORECASE), "falling"),
+]
+
 
 class BusInterfaceDetector:
     """
@@ -55,39 +89,31 @@ class BusInterfaceDetector:
         return detected
 
     def classify_clocks_resets(
-        self, ports: List[Port]
+        self, ports: List[Port], vhdl_text: Optional[str] = None
     ) -> Tuple[List[Clock], List[Reset]]:
         """
-        Identify clock and reset signals from ports.
+        Identify clock and reset signals from a list of ports.
+
+        When ``vhdl_text`` is provided the architecture body is scanned for
+        real edge-triggered constructs (``rising_edge``, ``falling_edge``,
+        ``'event and … = '1'``).  Ports whose names appear in such constructs
+        are classified as clocks with high confidence.  Name-pattern heuristics
+        serve as a fallback for ports not found via structural analysis.
 
         Args:
-            ports: List of parsed Port objects
+            ports: Parsed port objects from the entity declaration.
+            vhdl_text: Full VHDL source text (optional).  Supply this to enable
+                       architecture-body clock detection.
 
         Returns:
-            Tuple of (clocks, resets) lists
+            Tuple of (clocks, resets) lists.
         """
-        clocks = []
-        resets = []
+        clock_signals = (
+            self._detect_clock_names_from_vhdl(vhdl_text) if vhdl_text else set()
+        )
 
-        # Common clock patterns
-        clock_patterns = [
-            r"^i?_?clk",
-            r"^i?_?clock",
-            r"_clk$",
-            r"_clock$",
-            r"^aclk$",
-            r"^i_clk_.*",
-        ]
-
-        # Common reset patterns
-        reset_patterns = [
-            r"^i?_?rst",
-            r"^i?_?reset",
-            r"_rst$",
-            r"_reset$",
-            r"^aresetn?$",
-            r"^i_rst_n?_.*",
-        ]
+        clocks: List[Clock] = []
+        resets: List[Reset] = []
 
         for port in ports:
             if port.direction != PortDirection.IN:
@@ -95,37 +121,36 @@ class BusInterfaceDetector:
 
             name_lower = port.name.lower()
 
-            # Check clock patterns
-            for pattern in clock_patterns:
-                if re.search(pattern, name_lower, re.IGNORECASE):
-                    clocks.append(
-                        Clock(
-                            name=port.name,
-                            frequency=None,  # Unknown from VHDL
-                            description="Detected clock signal",
-                        )
-                    )
-                    break
-
-            # Check reset patterns
-            for pattern in reset_patterns:
-                if re.search(pattern, name_lower, re.IGNORECASE):
-                    # Detect polarity from name
-                    polarity = (
-                        Polarity.ACTIVE_LOW
-                        if "_n" in name_lower or "resetn" in name_lower
-                        else Polarity.ACTIVE_HIGH
-                    )
-                    resets.append(
-                        Reset(
-                            name=port.name,
-                            polarity=polarity,
-                            description="Detected reset signal",
-                        )
-                    )
-                    break
+            if port.width == 1 and (name_lower in clock_signals or _CLOCK_NAME_RE.search(name_lower)):
+                clocks.append(Clock(name=port.name, description="Detected clock signal"))
+            elif _RESET_NAME_RE.search(name_lower):
+                polarity = (
+                    Polarity.ACTIVE_LOW
+                    if "_n" in name_lower or "resetn" in name_lower
+                    else Polarity.ACTIVE_HIGH
+                )
+                resets.append(
+                    Reset(name=port.name, polarity=polarity, description="Detected reset signal")
+                )
 
         return clocks, resets
+
+    def _detect_clock_names_from_vhdl(self, vhdl_text: str) -> set:
+        """
+        Scan VHDL source for edge-triggered process constructs and return the
+        set of signal names (lowercase) used as clock arguments.
+
+        Recognises:
+          rising_edge(clk)  /  falling_edge(clk)
+          clk'event and clk = '1'  /  clk'event and clk = '0'
+        """
+        # Strip comments so patterns don't match commented-out code
+        clean = re.sub(r"--.*$", "", vhdl_text, flags=re.MULTILINE)
+        clock_names: set = set()
+        for pattern, _edge in _VHDL_CLOCK_CONSTRUCTS:
+            for m in pattern.finditer(clean):
+                clock_names.add(m.group(1).lower())
+        return clock_names
 
     def _group_ports_by_prefix(self, ports: List[Port]) -> Dict[str, List[Port]]:
         """
@@ -147,21 +172,16 @@ class BusInterfaceDetector:
 
         for port in ports:
             name_lower = port.name.lower()
-            matched = False
 
             for pattern in prefix_patterns:
-                match = re.match(pattern, name_lower)
-                if match:
-                    prefix = match.group(1)
-                    groups[prefix].append(port)
-                    matched = True
+                m = re.match(pattern, name_lower)
+                if m:
+                    groups[m.group(1)].append(port)
                     break
-
-            if not matched:
+            else:
                 # Try to extract prefix from underscore-separated name
                 parts = name_lower.split("_")
                 if len(parts) >= 2:
-                    # Use first two parts as potential prefix
                     potential_prefix = f"{parts[0]}_{parts[1]}_"
                     if any(
                         p.name.lower().startswith(potential_prefix)
@@ -207,22 +227,16 @@ class BusInterfaceDetector:
             required_matched = sum(1 for p in required_ports if p in suffix_map)
             optional_matched = sum(1 for p in optional_ports if p in suffix_map)
 
-            # Calculate score (required matches are worth more)
-            if len(required_ports) > 0:
-                required_ratio = required_matched / len(required_ports)
-            else:
-                required_ratio = 0
+            required_ratio = required_matched / len(required_ports) if required_ports else 0
 
-            # Need at least 70% of required ports to consider it a match
-            if required_ratio >= 0.7:
-                score = required_matched * 10 + optional_matched
+            if required_ratio >= _REQUIRED_MATCH_THRESHOLD:
+                score = required_matched * _REQUIRED_PORT_SCORE_WEIGHT + optional_matched
 
                 if score > best_score:
                     best_score = score
-                    # Determine mode from port directions
                     mode = self._detect_bus_mode(bus_def, suffix_map)
                     best_match = BusInterface(
-                        name=f"{prefix.strip('_').upper()}",
+                        name=prefix.strip("_").upper(),
                         type=bus_name,
                         mode=mode,
                         physical_prefix=prefix,
@@ -242,44 +256,33 @@ class BusInterfaceDetector:
         """
         bus_type_name = bus_def.get("busType", {}).get("name", "").lower()
 
-        # For AXI-Stream, use source/sink terminology
+        # For AXI-Stream / Avalon-ST, classify as source or sink
         if "axis" in bus_type_name or "avalon_st" in bus_type_name:
-            # Check TDATA or DATA direction
             for port_def in bus_def.get("ports", []):
-                if port_def["name"].upper() in ("TDATA", "DATA"):
-                    expected_dir = port_def.get("direction", "out")
-                    if port_def["name"].upper() in suffix_map:
-                        actual_port = suffix_map[port_def["name"].upper()]
-                        if (
-                            expected_dir == "out"
-                            and actual_port.direction == PortDirection.OUT
-                        ):
-                            return BusInterfaceMode.SOURCE
-                        elif (
-                            expected_dir == "out"
-                            and actual_port.direction == PortDirection.IN
-                        ):
-                            return BusInterfaceMode.SINK
-            return BusInterfaceMode.SOURCE  # Default
+                port_name = port_def["name"].upper()
+                if port_name not in ("TDATA", "DATA") or port_name not in suffix_map:
+                    continue
+                if port_def.get("direction", "out") == "out":
+                    actual = suffix_map[port_name]
+                    return (
+                        BusInterfaceMode.SOURCE
+                        if actual.direction == PortDirection.OUT
+                        else BusInterfaceMode.SINK
+                    )
+            return BusInterfaceMode.SOURCE
 
-        # For memory-mapped buses, use master/slave
-        # Check AWREADY or ARREADY direction
+        # For memory-mapped buses, classify as master or slave.
+        # AWREADY/ARREADY are driven by the slave — if they're outputs here, this is the slave.
         for port_def in bus_def.get("ports", []):
-            if port_def["name"].upper() in ("AWREADY", "ARREADY", "READDATA"):
-                expected_dir = port_def.get("direction", "in")
-                if port_def["name"].upper() in suffix_map:
-                    actual_port = suffix_map[port_def["name"].upper()]
-                    # Master: AWREADY is input (from slave)
-                    # Slave: AWREADY is output (to master)
-                    if (
-                        expected_dir == "in"
-                        and actual_port.direction == PortDirection.OUT
-                    ):
-                        return BusInterfaceMode.SLAVE
-                    elif (
-                        expected_dir == "in"
-                        and actual_port.direction == PortDirection.IN
-                    ):
-                        return BusInterfaceMode.MASTER
+            port_name = port_def["name"].upper()
+            if port_name not in ("AWREADY", "ARREADY", "READDATA") or port_name not in suffix_map:
+                continue
+            if port_def.get("direction", "in") == "in":
+                actual = suffix_map[port_name]
+                return (
+                    BusInterfaceMode.SLAVE
+                    if actual.direction == PortDirection.OUT
+                    else BusInterfaceMode.MASTER
+                )
 
-        return BusInterfaceMode.SLAVE  # Default for most IPs
+        return BusInterfaceMode.SLAVE

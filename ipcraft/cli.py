@@ -96,6 +96,16 @@ def get_bus_type(ip_core) -> str:
     return "axil"
 
 
+def _get_unmanaged_files(ip_core) -> set:
+    """Return the set of filenames (basename only) marked managed=False."""
+    unmanaged: set = set()
+    for fileset in ip_core.file_sets:
+        for f in fileset.files:
+            if not getattr(f, "managed", True):
+                unmanaged.add(Path(f.path).name)
+    return unmanaged
+
+
 def _print_file_tree(written: dict, output_base: Path) -> None:
     """Print a grouped directory tree derived from the written-files dict."""
     from collections import defaultdict
@@ -157,8 +167,6 @@ def cmd_validate(args):
 
 def cmd_new(args):
     """Scaffold a new IP core YAML from templates."""
-    import os
-
     # Validate bus type early, with a helpful message listing available choices.
     if args.bus:
         from ipcraft.utils import normalize_bus_type_key
@@ -189,16 +197,10 @@ def cmd_new(args):
             files_created.append(str(mm_path))
 
         # Parse the newly generated IP to render the ASCII diagram.
-        original_cwd = os.getcwd()
+        # parse_file() resolves the path internally, so no chdir needed.
         diagram = None
-        try:
-            if args.output and args.output != ".":
-                os.chdir(args.output)
-            filename = ip_path.name if args.output and args.output != "." else str(ip_path)
-            ip_core = YamlIpCoreParser().parse_file(filename)
-            diagram = generate_ascii_diagram(ip_core)
-        finally:
-            os.chdir(original_cwd)
+        ip_core = YamlIpCoreParser().parse_file(ip_path)
+        diagram = generate_ascii_diagram(ip_core)
 
         if args.json:
             print(json.dumps({
@@ -270,13 +272,7 @@ def _run_generate_core(args, output_base: Path) -> dict:
 
     log(f"Writing {len(all_files)} files...", args)
 
-    # Collect files the user has marked as unmanaged (should not be overwritten).
-    unmanaged_files = set()
-    if ip_core.file_sets:
-        for fileset in ip_core.file_sets:
-            for f in fileset.files:
-                if not getattr(f, "managed", True):
-                    unmanaged_files.add(Path(f.path).name)
+    unmanaged_files = _get_unmanaged_files(ip_core)
 
     written = {}
     skipped_unmanaged = []
@@ -322,12 +318,7 @@ def _run_generate_core(args, output_base: Path) -> dict:
 
 def _dry_run_report(all_files: dict, output_base: Path, ip_core) -> None:
     """Print which files would be written, unchanged, or skipped."""
-    unmanaged_files = set()
-    if ip_core.file_sets:
-        for fileset in ip_core.file_sets:
-            for f in fileset.files:
-                if not getattr(f, "managed", True):
-                    unmanaged_files.add(Path(f.path).name)
+    unmanaged_files = _get_unmanaged_files(ip_core)
 
     changed, unchanged, unmanaged = [], [], []
     for filepath, content in sorted(all_files.items()):

@@ -101,8 +101,9 @@ class ParseDispatcher:
 
     def _parse_vhdl(self, path: Path, detect_bus: bool = True) -> IpCore:
         """Parse a VHDL file using the existing VHDLParser + BusInterfaceDetector."""
+        vhdl_text = path.read_text()
         parser = VHDLParser()
-        result = parser.parse_file(str(path))
+        result = parser.parse_text(vhdl_text)
         ip_core = result.get("entity")
         if ip_core is None:
             raise ValueError(f"No VHDL entity found in '{path}'")
@@ -110,7 +111,7 @@ class ParseDispatcher:
         if detect_bus:
             detector = BusInterfaceDetector()
             bus_interfaces = detector.detect(ip_core.ports)
-            clocks, resets = detector.classify_clocks_resets(ip_core.ports)
+            clocks, resets = detector.classify_clocks_resets(ip_core.ports, vhdl_text=vhdl_text)
 
             claimed = set()
             for bi in bus_interfaces:

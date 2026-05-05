@@ -21,6 +21,12 @@ class ValidationError:
     location: str  # Where the error occurred (e.g., 'register:CTRL', 'bus:S_AXI_LITE')
     suggestion: str = ""  # Optional fix suggestion
 
+    def __str__(self) -> str:
+        s = f"{self.message} ({self.location})"
+        if self.suggestion:
+            s += f"\n    → {self.suggestion}"
+        return s
+
 
 class IpCoreValidator:
     """
