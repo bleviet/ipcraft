@@ -1,66 +1,58 @@
 """
 ipcraft init — Interactive TUI wizard for scaffolding a new IP core.
 
-Collects project details in 6 phases, then calls new + generate automatically.
-Uses questionary for prompts.
+A questionary + rich wizard that clears and redraws a live panel (config summary
++ ASCII diagram) before every prompt, giving a single-screen form feel with
+real-time feedback as values are filled in.
 """
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import questionary
 from questionary import Choice
+from rich.columns import Columns
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
+console = Console()
 
 # ---------------------------------------------------------------------------
-# Bus type display options
+# Bus options & lookup tables
 # ---------------------------------------------------------------------------
 
-# Sentinel string used in questionary Choice value to mean "no bus".
-# We cannot use None as a value because questionary.ask() also returns None
-# on Ctrl+C, which would be ambiguous.
 _NO_BUS_SENTINEL = "__NONE__"
 
 _BUS_OPTIONS = [
-    Choice(
-        title="AXI4-Lite   — Control/status register slave  (most common)",
-        value="AXI4_LITE",
-    ),
-    Choice(
-        title="AXI4-Full   — High-bandwidth burst slave  (DMA engines)",
-        value="AXI4_FULL",
-    ),
-    Choice(
-        title="AXI-Stream  — Streaming data path  (DSP, video pipelines)",
-        value="AXI_STREAM",
-    ),
-    Choice(
-        title="Avalon-MM   — Intel/Quartus register slave",
-        value="AVALON_MM",
-    ),
-    Choice(
-        title="Avalon-ST   — Intel/Quartus streaming path",
-        value="AVALON_ST",
-    ),
-    Choice(
-        title="None        — No bus interface  (standalone / custom)",
-        value=_NO_BUS_SENTINEL,
-    ),
+    Choice("AXI4-Lite   — Control/status register slave  (most common)", value="AXI4_LITE"),
+    Choice("AXI4-Full   — High-bandwidth burst slave  (DMA engines)",    value="AXI4_FULL"),
+    Choice("AXI-Stream  — Streaming data path  (DSP, video pipelines)",  value="AXI_STREAM"),
+    Choice("Avalon-MM   — Intel/Quartus register slave",                  value="AVALON_MM"),
+    Choice("Avalon-ST   — Intel/Quartus streaming path",                  value="AVALON_ST"),
+    Choice("None        — No bus interface  (standalone / custom)",       value=_NO_BUS_SENTINEL),
 ]
 
-# Default clock / reset names and polarity for each bus type.
-_BUS_CLK_DEFAULTS: dict = {
-    "AXI4_LITE":  ("s_axi_aclk",   "s_axi_resetn",  "active_low"),
-    "AXI4_FULL":  ("s_axi_aclk",   "s_axi_resetn",  "active_low"),
-    "AXI_STREAM": ("s_axis_aclk",  "s_axis_resetn", "active_low"),
-    "AVALON_MM":  ("clk",          "reset",         "active_high"),
-    "AVALON_ST":  ("clk",          "reset",         "active_high"),
+_BUS_DISPLAY = {
+    "AXI4_LITE":  "AXI4-Lite",
+    "AXI4_FULL":  "AXI4-Full",
+    "AXI_STREAM": "AXI-Stream",
+    "AVALON_MM":  "Avalon-MM",
+    "AVALON_ST":  "Avalon-ST",
 }
 
-# Bus key to pass to generate_new_ip (which uses older alias keys).
-_BUS_NEW_KEY: dict = {
+_BUS_CLK_DEFAULTS = {
+    "AXI4_LITE":  ("s_axi_aclk",  "s_axi_aresetn", "active_low"),
+    "AXI4_FULL":  ("s_axi_aclk",  "s_axi_aresetn", "active_low"),
+    "AXI_STREAM": ("s_axis_aclk", "s_axis_aresetn","active_low"),
+    "AVALON_MM":  ("clk",         "reset",         "active_high"),
+    "AVALON_ST":  ("clk",         "reset",         "active_high"),
+}
+
+_BUS_NEW_KEY = {
     "AXI4_LITE":  "AXI4L",
     "AXI4_FULL":  "AXI4",
     "AXI_STREAM": "AXIS",
@@ -68,21 +60,62 @@ _BUS_NEW_KEY: dict = {
     "AVALON_ST":  "AVALON_ST",
 }
 
-# Smart port suggestions keyed by IP name keywords.
-_PORT_SUGGESTIONS: dict = {
-    "pwm":   [("o_pwm",  1, "out")],
-    "uart":  [("o_tx",   1, "out"), ("i_rx", 1, "in")],
-    "spi":   [("o_sclk", 1, "out"), ("o_mosi", 1, "out"),
-              ("i_miso", 1, "in"),  ("o_cs_n", 1, "out")],
-    "gpio":  [("io_gpio", 8, "inout")],
-    "irq":   [("o_irq",  1, "out")],
-    "timer": [("o_irq",  1, "out")],
-    "dma":   [("o_irq",  1, "out")],
+# Human-readable interface names used in the diagram preview.
+_BUS_IF_PREVIEW_NAME = {
+    "AXI4_LITE":  "S_AXI_LITE",
+    "AXI4_FULL":  "S_AXI",
+    "AXI_STREAM": "S_AXIS",
+    "AVALON_MM":  "AVS",
+    "AVALON_ST":  "AVS_ST",
 }
 
+# Smart port defaults keyed by keywords found in the core name.
+_PORT_SUGGESTIONS = {
+    "pwm":   "o_pwm:1:out",
+    "uart":  "o_tx:1:out, i_rx:1:in",
+    "spi":   "o_sclk:1:out, o_mosi:1:out, i_miso:1:in, o_cs_n:1:out",
+    "gpio":  "io_gpio:8:inout",
+    "irq":   "o_irq:1:out",
+    "timer": "o_irq:1:out",
+    "dma":   "o_irq:1:out",
+}
+
+# Email domains that carry no useful vendor information.
+_PUBLIC_DOMAINS = {
+    "gmail", "yahoo", "outlook", "hotmail", "icloud",
+    "proton", "protonmail", "live", "msn", "me",
+}
 
 # ---------------------------------------------------------------------------
-# Input validators
+# Context inference
+# ---------------------------------------------------------------------------
+
+def _infer_defaults() -> dict:
+    """Infer good defaults from git config and current working directory."""
+    defaults = {"name": "my_core", "vendor": "user", "library": "ip", "version": "1.0.0"}
+
+    # Core name: use the current directory name if it is a valid VHDL identifier.
+    cwd = Path(".").resolve().name.lower().replace("-", "_")
+    if re.match(r"^[a-z][a-z0-9_]*$", cwd):
+        defaults["name"] = cwd
+
+    # Vendor: extract a meaningful organisation from the git user's email domain.
+    try:
+        email = subprocess.run(
+            ["git", "config", "user.email"],
+            capture_output=True, text=True, timeout=2,
+        ).stdout.strip()
+        if "@" in email:
+            domain = email.split("@")[-1].split(".")[0].lower()
+            if domain not in _PUBLIC_DOMAINS:
+                defaults["vendor"] = domain
+    except Exception:
+        pass
+
+    return defaults
+
+# ---------------------------------------------------------------------------
+# Validators & port parsing
 # ---------------------------------------------------------------------------
 
 def _valid_identifier(value: str):
@@ -90,273 +123,203 @@ def _valid_identifier(value: str):
         return True
     return "Use lowercase letters, digits, and underscores (must start with a letter)"
 
-
 def _valid_version(value: str):
     if re.match(r"^\d+\.\d+(\.\d+)?$", value.strip()):
         return True
     return "Use semver format: 1.0.0 or 1.0"
 
+def _parse_ports(text: str) -> Tuple[List[Tuple[str, int, str]], Optional[str]]:
+    """Parse compact port syntax: 'name:width:direction, ...'.
 
-def _valid_width(value: str):
-    try:
-        if int(value.strip()) >= 1:
-            return True
-    except ValueError:
-        pass
-    return "Enter a positive integer"
-
-
-# ---------------------------------------------------------------------------
-# Wizard phases
-# ---------------------------------------------------------------------------
-
-def _phase_identity() -> Optional[dict]:
-    """Phase 1 — collect core name, vendor, library, version."""
-    print()
-    questionary.print("Phase 1/6 — IP Core Identity", style="bold")
-    questionary.print(
-        "  (Press Enter to accept defaults, Ctrl+C to cancel)\n",
-        style="fg:ansidarkgray",
-    )
-
-    name = questionary.text(
-        "Core name:",
-        default="my_core",
-        validate=_valid_identifier,
-        instruction="(lowercase, underscores only)",
-    ).ask()
-    if name is None:
-        return None
-
-    vendor = questionary.text("Vendor:", default="ipcraft").ask()
-    if vendor is None:
-        return None
-
-    library = questionary.text("Library:", default="ip").ask()
-    if library is None:
-        return None
-
-    version = questionary.text(
-        "Version:", default="1.0.0", validate=_valid_version
-    ).ask()
-    if version is None:
-        return None
-
-    return {
-        "name": name.strip(),
-        "vendor": vendor.strip(),
-        "library": library.strip(),
-        "version": version.strip(),
-    }
-
-
-def _phase_bus() -> Optional[str]:
-    """Phase 2 — select primary bus interface.
-
-    Returns a bus key string, _NO_BUS_SENTINEL, or None on Ctrl+C.
+    Returns (ports, error_message).  error_message is None on success.
     """
-    print()
-    questionary.print("Phase 2/6 — Primary Bus Interface", style="bold")
+    if not text.strip():
+        return [], None
+    ports = []
+    for part in text.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        pieces = [p.strip() for p in part.split(":")]
+        if len(pieces) != 3:
+            return [], f"Bad syntax '{part}' — use name:width:direction"
+        pname, pwidth_str, pdirection = pieces
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", pname):
+            return [], f"Invalid port name '{pname}'"
+        try:
+            pwidth = int(pwidth_str)
+            if pwidth < 1:
+                raise ValueError
+        except ValueError:
+            return [], f"Width must be a positive integer, got '{pwidth_str}'"
+        if pdirection not in ("in", "out", "inout"):
+            return [], f"Direction must be in/out/inout, got '{pdirection}'"
+        ports.append((pname, pwidth, pdirection))
+    return ports, None
 
-    result = questionary.select(
-        "Select bus type:",
-        choices=_BUS_OPTIONS,
-        use_shortcuts=False,
-    ).ask()
-    return result  # None means Ctrl+C
+def _valid_ports(value: str):
+    _, err = _parse_ports(value)
+    return True if err is None else err
 
+def _polarity_from_name(rst_name: str) -> str:
+    """Infer reset polarity from port name conventions."""
+    lower = rst_name.lower()
+    if lower.endswith("_n") or "resetn" in lower or "aresetn" in lower:
+        return "active_low"
+    return "active_high"
 
-def _phase_clocks(bus: Optional[str]) -> Optional[dict]:
-    """Phase 3 — clock name, reset name, and polarity."""
-    print()
-    questionary.print("Phase 3/6 — Clocks & Resets", style="bold")
+# ---------------------------------------------------------------------------
+# Live panel rendering
+# ---------------------------------------------------------------------------
 
-    effective_bus = bus if bus and bus != _NO_BUS_SENTINEL else None
-    defaults = _BUS_CLK_DEFAULTS.get(effective_bus, ("clk", "rst_n", "active_low"))
-    default_clk, default_rst, default_polarity = defaults
+def _build_config_panel(state: dict) -> Panel:
+    """Render the left configuration summary panel."""
+    t = Text()
 
-    clk_name = questionary.text("Clock port name:", default=default_clk).ask()
-    if clk_name is None:
-        return None
+    def row(label: str, value: str, style: str = "cyan") -> None:
+        t.append(f"  {label:<10}", style="dim")
+        if value:
+            t.append(f"{value}\n", style=style)
+        else:
+            t.append("—\n", style="dim")
 
-    rst_name = questionary.text("Reset port name:", default=default_rst).ask()
-    if rst_name is None:
-        return None
+    row("Name",    state.get("name") or "")
+    row("Vendor",  state.get("vendor") or "")
+    row("Library", state.get("library") or "")
+    row("Version", state.get("version") or "")
 
-    polarity = questionary.select(
-        "Reset polarity:",
-        choices=[
-            Choice(
-                "Active-low  (typical for AXI — name often ends in _n or _resetn)",
-                value="active_low",
-            ),
-            Choice(
-                "Active-high (typical for Avalon)",
-                value="active_high",
-            ),
-        ],
-        default="active_low" if default_polarity == "active_low" else "active_high",
-    ).ask()
-    if polarity is None:
-        return None
-
-    return {
-        "clk_name": clk_name.strip(),
-        "rst_name": rst_name.strip(),
-        "polarity": polarity,
-    }
-
-
-def _phase_ports(name: str) -> Optional[List[Tuple[str, int, str]]]:
-    """Phase 4 — extra (non-bus) ports."""
-    print()
-    questionary.print("Phase 4/6 — Extra Ports", style="bold")
-    questionary.print(
-        "  Add non-bus ports to the top-level entity.\n",
-        style="fg:ansidarkgray",
-    )
-
-    # Offer smart suggestions based on keywords in the IP name.
-    suggestions: List[Tuple[str, int, str]] = []
-    for keyword, ports in _PORT_SUGGESTIONS.items():
-        if keyword in name.lower():
-            suggestions.extend(ports)
-
-    if suggestions:
-        suggestion_str = ", ".join(f"{p[0]}[{p[1]}] {p[2]}" for p in suggestions)
-        print(f"  Suggestion for '{name}': {suggestion_str}")
-        use_suggestions = questionary.confirm(
-            "  Accept suggested ports?", default=True
-        ).ask()
-        if use_suggestions is None:
-            return None
-        if use_suggestions:
-            return suggestions
-
-    ports: List[Tuple[str, int, str]] = []
-    print("  Enter ports one at a time. Leave name blank to finish.")
-    while True:
-        port_name = questionary.text("  Port name (blank to finish):").ask()
-        if port_name is None:
-            return None
-        if not port_name.strip():
-            break
-
-        width_str = questionary.text(
-            f"  Width of '{port_name}':", default="1", validate=_valid_width
-        ).ask()
-        if width_str is None:
-            return None
-
-        direction = questionary.select(
-            f"  Direction of '{port_name}':",
-            choices=["in", "out", "inout"],
-        ).ask()
-        if direction is None:
-            return None
-
-        ports.append((port_name.strip(), int(width_str.strip()), direction))
-
-    return ports
-
-
-def _phase_output_options(name: str) -> Optional[dict]:
-    """Phase 5 — what to generate and output directory."""
-    print()
-    questionary.print("Phase 5/6 — Output Options", style="bold")
-
-    vendor_choices = questionary.checkbox(
-        "Vendor integration files:",
-        choices=[
-            Choice("Intel  (Platform Designer .tcl)", value="intel", checked=True),
-            Choice("Xilinx (IP-XACT component.xml + Vivado xgui .tcl)", value="xilinx", checked=True),
-        ],
-    ).ask()
-    if vendor_choices is None:
-        return None
-
-    if set(vendor_choices) == {"intel", "xilinx"}:
-        vendor_flag = "both"
-    elif vendor_choices == ["intel"]:
-        vendor_flag = "intel"
-    elif vendor_choices == ["xilinx"]:
-        vendor_flag = "xilinx"
+    bus = state.get("bus")
+    if bus and bus != _NO_BUS_SENTINEL:
+        row("Bus", _BUS_DISPLAY.get(bus, bus), style="green")
+    elif bus == _NO_BUS_SENTINEL:
+        row("Bus", "None", style="dim")
     else:
-        vendor_flag = "none"
+        row("Bus", "")
 
-    gen_choices = questionary.checkbox(
-        "Additional outputs:",
-        choices=[
-            Choice("Cocotb testbench skeleton   (_test.py + Makefile)", value="testbench", checked=True),
-            Choice("Standalone register bank    (_regs.vhd)", value="regs", checked=True),
-        ],
-    ).ask()
-    if gen_choices is None:
-        return None
+    row("Clock",   state.get("clk_name") or "", style="yellow")
 
-    output_dir = questionary.text("Output directory:", default=f"./{name}").ask()
-    if output_dir is None:
-        return None
+    rst = state.get("rst_name") or ""
+    pol = state.get("polarity") or "active_low"
+    pol_str = "↓ active-low" if pol == "active_low" else "↑ active-high"
+    row("Reset",   f"{rst}  {pol_str}" if rst else "", style="red")
 
-    return {
-        "vendor_flag": vendor_flag,
-        "include_testbench": "testbench" in gen_choices,
-        "include_regs": "regs" in gen_choices,
-        "output_dir": output_dir.strip(),
-    }
+    ports = state.get("ports") or []
+    if ports:
+        port_str = ", ".join(f"{p[0]}:{p[1]}:{p[2]}" for p in ports)
+        row("Ports", port_str, style="magenta")
+    else:
+        row("Ports", "")
+
+    row("Output",  state.get("output_dir") or "")
+
+    return Panel(t, title="[bold]Configuration[/bold]", border_style="blue", padding=(0, 1))
 
 
-def _phase_confirm(
-    name: str,
-    identity: dict,
-    bus: Optional[str],
-    clocks: dict,
-    ports: List[Tuple[str, int, str]],
-    output_opts: dict,
-) -> Optional[bool]:
-    """Phase 6 — show equivalent CLI command and ask to proceed."""
-    print()
-    questionary.print("Phase 6/6 — Confirm & Generate", style="bold")
+def _build_diagram_panel(state: dict) -> Panel:
+    """Render the right IP core preview panel."""
+    content = _generate_preview(state)
+    return Panel(content, title="[bold]IP Core Preview[/bold]", border_style="green", padding=(0, 1))
 
-    effective_bus = bus if bus and bus != _NO_BUS_SENTINEL else None
-    bus_key_for_new = _BUS_NEW_KEY.get(effective_bus, effective_bus) if effective_bus else None
 
-    cli_new = (
-        f"ipcraft new {name}"
-        f" --vendor {identity['vendor']}"
-        f" --library {identity['library']}"
-        f" --version {identity['version']}"
-    )
-    if bus_key_for_new:
-        cli_new += f" --bus {bus_key_for_new}"
-    cli_new += f" --output {output_opts['output_dir']}"
+def _generate_preview(state: dict) -> str:
+    """Build an ASCII diagram from the current wizard state using the model layer."""
+    name = state.get("name")
+    if not name:
+        return "\n  [dim](fill in the core name to see a preview)[/dim]\n"
 
-    cli_gen = f"ipcraft generate {output_opts['output_dir']}/{name}.ip.yml"
-    cli_gen += f" --vendor {output_opts['vendor_flag']}"
-    if not output_opts["include_testbench"]:
-        cli_gen += " --no-testbench"
-    if not output_opts["include_regs"]:
-        cli_gen += " --no-regs"
+    try:
+        from ipcraft.model import IpCore, VLNV, Port, PortDirection
+        from ipcraft.model.base import Polarity
+        from ipcraft.model.bus import BusInterface, BusInterfaceMode
+        from ipcraft.model.clock_reset import Clock, Reset
+        from ipcraft.utils.diagram import generate_ascii_diagram
 
-    sep = "─" * 60
-    print()
-    print(f"  {sep}")
-    print("  Equivalent CLI command (copy for scripts / CI):\n")
-    print(f"    {cli_new} \\")
-    print(f"      && {cli_gen}")
-    print(f"  {sep}")
-    print()
+        clocks = []
+        if state.get("clk_name"):
+            clocks.append(Clock(name=state["clk_name"], description=""))
 
-    return questionary.confirm("Generate now?", default=True).ask()
+        resets = []
+        if state.get("rst_name"):
+            polarity = (
+                Polarity.ACTIVE_LOW
+                if state.get("polarity") == "active_low"
+                else Polarity.ACTIVE_HIGH
+            )
+            resets.append(Reset(name=state["rst_name"], polarity=polarity, description=""))
+
+        bus_interfaces = []
+        bus = state.get("bus")
+        if bus and bus != _NO_BUS_SENTINEL:
+            bus_interfaces.append(BusInterface(
+                name=_BUS_IF_PREVIEW_NAME.get(bus, f"S_{bus}"),
+                type=bus,
+                mode=BusInterfaceMode.SLAVE,
+                physical_prefix="s_axi_",
+                description=f"{_BUS_DISPLAY.get(bus, bus)} interface",
+            ))
+
+        ports = []
+        for pname, pwidth, pdirection in (state.get("ports") or []):
+            ports.append(Port(
+                name=pname,
+                direction=PortDirection.from_string(pdirection),
+                width=pwidth,
+                type="std_logic" if pwidth == 1 else f"std_logic_vector({pwidth - 1} downto 0)",
+                description="",
+            ))
+
+        ip = IpCore(
+            vlnv=VLNV(vendor="preview", library="ip", name=name, version="1.0.0"),
+            clocks=clocks,
+            resets=resets,
+            bus_interfaces=bus_interfaces,
+            ports=ports,
+        )
+        return generate_ascii_diagram(ip)
+
+    except Exception:
+        return "\n  [dim](preview not available)[/dim]\n"
+
+
+def _refresh(state: dict) -> None:
+    """Clear screen and redraw the live header with config + diagram panels."""
+    console.clear()
+    console.rule("[bold cyan]  ipcraft init  —  IP Core Wizard  [/bold cyan]", style="blue")
+    console.print()
+
+    config_panel = _build_config_panel(state)
+    diagram_panel = _build_diagram_panel(state)
+
+    if console.width >= 110:
+        console.print(Columns([config_panel, diagram_panel], equal=True, expand=True))
+    else:
+        # Narrow terminal: stack vertically
+        console.print(config_panel)
+        console.print(diagram_panel)
+
+    console.print()
+
+
+def _ask(state: dict, prompt_fn) -> Optional[object]:
+    """Redraw the live header then run a questionary prompt."""
+    _refresh(state)
+    return prompt_fn()
+
+
+def _cancelled() -> None:
+    console.print("\n[dim]Cancelled.[/dim]")
+    sys.exit(0)
 
 
 # ---------------------------------------------------------------------------
-# Post-processing: patch generated .ip.yml with wizard choices
+# Post-processing: patch generated .ip.yml
 # ---------------------------------------------------------------------------
 
 def _patch_ip_yaml(
     ip_path: Path,
-    clocks: dict,
+    clk_name: str,
+    rst_name: str,
+    polarity: str,
     ports: List[Tuple[str, int, str]],
     template_clk: str,
     template_rst: str,
@@ -365,127 +328,249 @@ def _patch_ip_yaml(
     import yaml as yaml_lib
 
     text = ip_path.read_text()
+    if clk_name != template_clk:
+        text = text.replace(template_clk, clk_name)
+    if rst_name != template_rst:
+        text = text.replace(template_rst, rst_name)
 
-    # Rename clock and reset signals everywhere in the file (port names, refs).
-    if clocks["clk_name"] != template_clk:
-        text = text.replace(template_clk, clocks["clk_name"])
-    if clocks["rst_name"] != template_rst:
-        text = text.replace(template_rst, clocks["rst_name"])
-
-    # Patch reset polarity.
-    polarity_str = "activeLow" if clocks["polarity"] == "active_low" else "activeHigh"
+    polarity_str = "activeLow" if polarity == "active_low" else "activeHigh"
     text = re.sub(r"polarity:\s*\S+", f"polarity: {polarity_str}", text)
-
     ip_path.write_text(text)
 
-    # Append extra ports via YAML round-trip (preserves existing structure).
     if ports:
         data = yaml_lib.safe_load(ip_path.read_text())
-        existing_ports = data.get("ports") or []
+        existing = data.get("ports") or []
         for pname, pwidth, pdirection in ports:
-            existing_ports.append({
+            existing.append({
                 "name": pname,
-                "logicalName": pname.lstrip("io_"),
+                "logicalName": re.sub(r"^[io]o?_", "", pname),
                 "direction": pdirection,
                 "width": pwidth,
                 "description": f"{pdirection.title()} port",
             })
-        data["ports"] = existing_ports
-        ip_path.write_text(
-            yaml_lib.dump(data, default_flow_style=False, sort_keys=False)
-        )
+        data["ports"] = existing
+        ip_path.write_text(yaml_lib.dump(data, default_flow_style=False, sort_keys=False))
 
 
 # ---------------------------------------------------------------------------
-# Main entry point
+# Wizard entry point
 # ---------------------------------------------------------------------------
 
 def run_init_wizard(args) -> None:
     """Run the interactive IP core wizard (called from cli.py cmd_init)."""
-    print()
-    print("  ipcraft init — IP Core Wizard")
-    print("  Press Ctrl+C at any time to cancel.")
+    state: dict = _infer_defaults()
+    state.update({
+        "bus": None,
+        "clk_name": None,
+        "rst_name": None,
+        "polarity": "active_low",
+        "ports": [],
+        "output_dir": None,
+    })
 
     try:
-        # Phase 1
-        identity = _phase_identity()
-        if identity is None:
-            print("\nCancelled.")
-            sys.exit(0)
+        # ── Core name ────────────────────────────────────────────────────
+        val = _ask(state, lambda: questionary.text(
+            "Core name:",
+            default=state["name"],
+            validate=_valid_identifier,
+            instruction="(lowercase, underscores only)",
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["name"] = val.strip()
+        state["output_dir"] = f"./{state['name']}"
 
-        # Phase 2
-        bus_raw = _phase_bus()
-        if bus_raw is None:
-            print("\nCancelled.")
-            sys.exit(0)
-        # Resolve sentinel → None (no bus)
-        effective_bus = bus_raw if bus_raw != _NO_BUS_SENTINEL else None
+        # ── Vendor ───────────────────────────────────────────────────────
+        val = _ask(state, lambda: questionary.text(
+            "Vendor:", default=state["vendor"],
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["vendor"] = val.strip()
 
-        # Phase 3
-        clocks = _phase_clocks(bus_raw)
-        if clocks is None:
-            print("\nCancelled.")
-            sys.exit(0)
+        # ── Library ──────────────────────────────────────────────────────
+        val = _ask(state, lambda: questionary.text(
+            "Library:", default=state["library"],
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["library"] = val.strip()
 
-        # Phase 4
-        ports = _phase_ports(identity["name"])
-        if ports is None:
-            print("\nCancelled.")
-            sys.exit(0)
+        # ── Version ──────────────────────────────────────────────────────
+        val = _ask(state, lambda: questionary.text(
+            "Version:", default=state["version"], validate=_valid_version,
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["version"] = val.strip()
 
-        # Phase 5
-        output_opts = _phase_output_options(identity["name"])
-        if output_opts is None:
-            print("\nCancelled.")
-            sys.exit(0)
+        # ── Bus type ─────────────────────────────────────────────────────
+        val = _ask(state, lambda: questionary.select(
+            "Primary bus interface:", choices=_BUS_OPTIONS,
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["bus"] = val
 
-        # Phase 6
-        confirmed = _phase_confirm(
-            identity["name"], identity, bus_raw, clocks, ports, output_opts
+        # Pre-fill clock/reset defaults from the selected bus type.
+        effective_bus = val if val != _NO_BUS_SENTINEL else None
+        default_clk, default_rst, default_pol = (
+            _BUS_CLK_DEFAULTS.get(effective_bus, ("clk", "rst_n", "active_low"))
+            if effective_bus else ("clk", "rst_n", "active_low")
         )
+        state["clk_name"] = default_clk
+        state["rst_name"] = default_rst
+        state["polarity"] = default_pol
+
+        # ── Clock port ───────────────────────────────────────────────────
+        val = _ask(state, lambda: questionary.text(
+            "Clock port name:", default=state["clk_name"],
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["clk_name"] = val.strip()
+
+        # ── Reset port ───────────────────────────────────────────────────
+        val = _ask(state, lambda: questionary.text(
+            "Reset port name:", default=state["rst_name"],
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["rst_name"] = val.strip()
+        # Infer polarity from the port name suffix rather than asking the user.
+        state["polarity"] = _polarity_from_name(state["rst_name"])
+
+        # ── Extra ports ──────────────────────────────────────────────────
+        suggestion = next(
+            (s for kw, s in _PORT_SUGGESTIONS.items() if kw in state["name"].lower()),
+            "",
+        )
+        val = _ask(state, lambda: questionary.text(
+            "Extra ports:",
+            default=suggestion,
+            validate=_valid_ports,
+            instruction="name:width:dir, ...  e.g. o_pwm:1:out, i_data:8:in  (blank = none)",
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["ports"], _ = _parse_ports(val)
+
+        # ── Vendor integration targets ───────────────────────────────────
+        vendor_choices = _ask(state, lambda: questionary.checkbox(
+            "Vendor integration targets:",
+            choices=[
+                Choice("Intel  — Platform Designer _hw.tcl",                  value="intel",  checked=True),
+                Choice("Xilinx — IP-XACT component.xml + Vivado xgui .tcl",   value="xilinx", checked=True),
+            ],
+        ).ask())
+        if vendor_choices is None:
+            _cancelled()
+        if {"intel", "xilinx"} <= set(vendor_choices):
+            vendor_flag = "both"
+        elif "intel" in vendor_choices:
+            vendor_flag = "intel"
+        elif "xilinx" in vendor_choices:
+            vendor_flag = "xilinx"
+        else:
+            vendor_flag = "none"
+
+        # ── Additional code generation ───────────────────────────────────
+        gen_choices = _ask(state, lambda: questionary.checkbox(
+            "Additional outputs:",
+            choices=[
+                Choice("Cocotb testbench skeleton  (_test.py + Makefile)", value="testbench", checked=True),
+                Choice("Standalone register bank   (_regs.vhd)",           value="regs",      checked=True),
+            ],
+        ).ask())
+        if gen_choices is None:
+            _cancelled()
+        include_testbench = "testbench" in gen_choices
+        include_regs      = "regs"      in gen_choices
+
+        # ── Output directory ─────────────────────────────────────────────
+        val = _ask(state, lambda: questionary.text(
+            "Output directory:", default=state["output_dir"],
+        ).ask())
+        if val is None:
+            _cancelled()
+        state["output_dir"] = val.strip()
+
+        # ── Confirm ──────────────────────────────────────────────────────
+        effective_bus    = state["bus"] if state["bus"] != _NO_BUS_SENTINEL else None
+        bus_key_for_new  = _BUS_NEW_KEY.get(effective_bus, effective_bus) if effective_bus else None
+
+        cli_new = (
+            f"ipcraft new {state['name']}"
+            f" --vendor {state['vendor']}"
+            f" --library {state['library']}"
+            f" --version {state['version']}"
+        )
+        if bus_key_for_new:
+            cli_new += f" --bus {bus_key_for_new}"
+        cli_new += f" --output {state['output_dir']}"
+
+        cli_gen = f"ipcraft generate {state['output_dir']}/{state['name']}.ip.yml"
+        cli_gen += f" --vendor {vendor_flag}"
+        if not include_testbench:
+            cli_gen += " --no-testbench"
+        if not include_regs:
+            cli_gen += " --no-regs"
+
+        _refresh(state)
+        console.print(Panel(
+            f"[dim]Equivalent CLI command (copy for CI / scripts):[/dim]\n\n"
+            f"  [bold]{cli_new}[/bold] \\\n"
+            f"    [bold]&& {cli_gen}[/bold]",
+            title="[bold yellow]Ready to Generate[/bold yellow]",
+            border_style="yellow",
+            padding=(1, 2),
+        ))
+        console.print()
+
+        confirmed = questionary.confirm("Generate now?", default=True).ask()
         if not confirmed:
-            print("\nCancelled.")
-            sys.exit(0)
+            _cancelled()
 
-        # ----------------------------------------------------------------
-        # Execute: scaffold then generate
-        # ----------------------------------------------------------------
-        print()
-        bus_key_for_new = (
-            _BUS_NEW_KEY.get(effective_bus, effective_bus) if effective_bus else None
-        )
-
+        # ── Execute: scaffold → patch → generate ─────────────────────────
+        console.print()
         from ipcraft.generator.yaml.boilerplate import generate_new_ip
 
         ip_path, mm_path = generate_new_ip(
-            name=identity["name"],
-            vendor=identity["vendor"],
-            library=identity["library"],
-            version=identity["version"],
+            name=state["name"],
+            vendor=state["vendor"],
+            library=state["library"],
+            version=state["version"],
             bus_type=bus_key_for_new,
-            output_dir=output_opts["output_dir"],
+            output_dir=state["output_dir"],
         )
-        print(f"✓ Generated {ip_path}")
+        console.print(f"[green]✓[/green] Generated {ip_path}")
         if mm_path:
-            print(f"✓ Generated {mm_path}")
+            console.print(f"[green]✓[/green] Generated {mm_path}")
 
-        # Patch clock/reset names, polarity, and extra ports.
-        effective_defaults = _BUS_CLK_DEFAULTS.get(
-            effective_bus, ("clk", "rst_n", "active_low")
-        ) if effective_bus else ("clk", "rst_n", "active_low")
-        template_clk, template_rst, _ = effective_defaults
-        _patch_ip_yaml(ip_path, clocks, ports, template_clk, template_rst)
+        # Determine template defaults for substitution.
+        template_clk, template_rst, _ = (
+            _BUS_CLK_DEFAULTS.get(effective_bus, ("clk", "rst_n", "active_low"))
+            if effective_bus else ("clk", "rst_n", "active_low")
+        )
+        _patch_ip_yaml(
+            ip_path,
+            clk_name=state["clk_name"],
+            rst_name=state["rst_name"],
+            polarity=state["polarity"],
+            ports=state["ports"],
+            template_clk=template_clk,
+            template_rst=template_rst,
+        )
 
-        # Run the generator by re-using cli._run_generate_core.
-        # Build a minimal args namespace that satisfies its interface.
         import types
         from ipcraft.cli import _run_generate_core, _print_file_tree
 
         gen_args = types.SimpleNamespace(
             input=str(ip_path.resolve()),
-            vendor=output_opts["vendor_flag"],
-            testbench=output_opts["include_testbench"],
-            regs=output_opts["include_regs"],
+            vendor=vendor_flag,
+            testbench=include_testbench,
+            regs=include_regs,
             dump_context=False,
             update_yaml=True,
             dry_run=False,
@@ -494,37 +579,40 @@ def run_init_wizard(args) -> None:
             progress=False,
             template_dir=None,
         )
-        output_base = Path(output_opts["output_dir"]).resolve()
+        output_base = Path(state["output_dir"]).resolve()
 
-        print()
+        console.print()
         written = _run_generate_core(gen_args, output_base)
-        print(f"✓ {len(written)} files written to: {output_opts['output_dir']}")
-        print()
+        console.print(f"[green]✓[/green] {len(written)} files written to: {state['output_dir']}")
+        console.print()
 
-        # Print ASCII diagram.
+        # Final diagram from the fully-patched YAML.
         try:
             from ipcraft.parser.yaml.ip_yaml_parser import YamlIpCoreParser as _YP
             from ipcraft.utils.diagram import generate_ascii_diagram
             ip_diag = _YP().parse_file(str(ip_path.resolve()))
-            print("IP Core Symbol:")
-            print(generate_ascii_diagram(ip_diag))
-            print()
+            console.print(Panel(
+                generate_ascii_diagram(ip_diag),
+                title="[bold green]Generated IP Core[/bold green]",
+                border_style="green",
+            ))
         except Exception:
             pass
 
-        # Print generated file tree.
         _print_file_tree(written, output_base)
 
-        print()
-        questionary.print("Next steps:", style="bold")
-        print(f"  1. Edit {output_opts['output_dir']}/{identity['name']}.mm.yml")
-        print(f"       Add your registers, then regenerate.")
-        print(f"  2. ipcraft generate {output_opts['output_dir']}/{identity['name']}.ip.yml")
-        print(f"       Re-run after every register map change.")
-        print(f"  3. cd {output_opts['output_dir']}/tb && make SIM=ghdl")
-        print(f"       Run the generated Cocotb simulation.")
-        print()
+        console.print()
+        console.rule("[bold green]  Next Steps  [/bold green]", style="green")
+        out = state["output_dir"]
+        name = state["name"]
+        console.print(f"  1. Edit [cyan]{out}/{name}.mm.yml[/cyan]")
+        console.print(f"       Add registers, then regenerate.")
+        console.print(f"  2. [bold]ipcraft generate {out}/{name}.ip.yml[/bold]")
+        console.print(f"       Re-run after every register map change.")
+        console.print(f"  3. [bold]cd {out}/tb && make SIM=ghdl[/bold]")
+        console.print(f"       Run the generated Cocotb simulation.")
+        console.print()
 
     except KeyboardInterrupt:
-        print("\n\nCancelled.")
+        console.print("\n\n[dim]Cancelled.[/dim]")
         sys.exit(0)
