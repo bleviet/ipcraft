@@ -643,7 +643,8 @@ def cmd_init(args):
 
 _EXAMPLES = """\
 Examples:
-  ipcraft init                                      interactive wizard for new users
+  ipcraft init                                      interactive wizard — browse examples or start fresh
+  ipcraft init basic_peripheral.ip.yml             clone an existing IP core under a new name
   ipcraft new my_core --bus AXI4_LITE -o ./my_core  scaffold from template
   ipcraft generate my_core.ip.yml --output ./build  generate VHDL + vendor files
   ipcraft generate my_core.ip.yml --dry-run         preview changes without writing
@@ -673,9 +674,17 @@ def main():
         description=(
             "Guided step-by-step wizard that collects project details interactively,\n"
             "then scaffolds the YAML files and runs generation automatically.\n\n"
+            "Pass an existing .ip.yml file to clone it under a new name without\n"
+            "touching the original (template mode).\n\n"
             "For non-interactive use (scripts, CI) use 'new' + 'generate' instead."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    init_p.add_argument(
+        "template",
+        nargs="?",
+        metavar="TEMPLATE.ip.yml",
+        help="Existing .ip.yml to use as a starting point (skips mode selection)",
     )
     _add_common_args(init_p)
     init_p.set_defaults(func=cmd_init)
