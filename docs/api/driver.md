@@ -81,7 +81,7 @@ attributes.
 ```python
 driver = load_driver("core.mm.yml", bus)
 
-# Access address blocks
+# Access address blocks by name
 block = driver.REGS
 
 # Access registers
@@ -89,7 +89,24 @@ reg = driver.REGS.CTRL
 
 # Access fields
 field = driver.REGS.CTRL.ENABLE
+
+# Iterate blocks in declaration order
+for block_name in driver._blocks:
+    block = getattr(driver, block_name)
+    for reg_name in block._registers:
+        reg = getattr(block, reg_name)
 ```
+
+### `_blocks`
+
+An ordered `list[str]` of address block names, populated by `load_driver()` as
+blocks are attached. Use this for structured iteration instead of `dir()`.
+
+### `_registers` (on `AddressBlock`)
+
+Each `AddressBlock` has a `_registers: list[str]` attribute — an ordered list
+of register names attached to that block. Use this for structured iteration
+instead of `dir()`.
 
 ---
 

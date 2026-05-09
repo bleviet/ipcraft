@@ -59,6 +59,7 @@ nav:
       - IP YAML Specification: user-guide/ip-yaml-spec.md
       - Memory Maps: user-guide/memory-maps.md
       - Bus Library: user-guide/bus-library.md
+      - Custom Templates: user-guide/templates.md
   - Architecture:
       - Overview: architecture/overview.md
       - Data Model: architecture/data-model.md

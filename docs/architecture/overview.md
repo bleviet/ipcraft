@@ -30,8 +30,12 @@ graph TB
 
     subgraph Parsers
         VP["VHDLParser"]
+        VRP["VerilogParser"]
         BD["BusInterfaceDetector"]
         YP["YamlIpCoreParser"]
+        PD["ParseDispatcher"]
+        HTP["HwTclParser"]
+        IXP["IpXactParser"]
     end
 
     subgraph "Canonical Model"
@@ -60,6 +64,13 @@ graph TB
     end
 
     VHDL --> VP --> BD --> YG --> YAML_OUT
+    VerilogSrc["Verilog Source"] --> VRP --> BD
+    HwTcl["Intel _hw.tcl"] --> HTP
+    IpXact["component.xml"] --> IXP
+    PD --> VP
+    PD --> VRP
+    PD --> HTP
+    PD --> IXP
     YAML_IN --> YP --> IC
     IC --> VAL
     IC --> PG --> RTL
@@ -75,7 +86,8 @@ ipcraft/
   model/         Pydantic data models (IpCore, MemoryMap, BusInterface, ...)
   parser/
     yaml/        YAML-to-IpCore parser with mixin architecture
-    hdl/         VHDL parser and bus interface detector
+    hdl/         VHDL and Verilog parsers + bus interface detector
+    vendor/      ParseDispatcher, HwTclParser (Intel), IpXactParser (Xilinx)
   generator/
     hdl/         VHDL/vendor/testbench generation (Jinja2 templates)
     yaml/        IpCore-to-YAML generation (reverse of parser)
@@ -83,16 +95,20 @@ ipcraft/
   driver/        Cocotb bus integration and dynamic driver loader
   utils/         Shared utilities (bus type normalization, bit parsing)
   cli.py         Command-line interface (argparse)
+  cli_init.py    Interactive TUI wizard (questionary + rich)
 ```
 
 ## Data Flow
 
-### Parse Flow (VHDL to YAML)
+### Parse Flow (Source File to YAML)
 
-1. `VHDLParser` extracts entity ports, generics, and architecture from VHDL
-   using pyparsing grammar (with regex fallback).
-2. `BusInterfaceDetector` groups ports by prefix and matches against bus
-   library definitions (>=70% required port match threshold).
+1. `ParseDispatcher` auto-detects the input format from the file extension and
+   content, then delegates to the appropriate parser:
+   - `VHDLParser` / `VerilogParser` for HDL source files
+   - `HwTclParser` for Intel Platform Designer `_hw.tcl` scripts
+   - `IpXactParser` for Xilinx `component.xml` IP-XACT files
+2. For HDL inputs, `BusInterfaceDetector` groups ports by prefix and matches
+   against bus library definitions (≥ 70% required port match threshold).
 3. `IpYamlGenerator` assembles clocks, resets, ports, bus interfaces, and
    parameters into a YAML structure.
 
@@ -113,7 +129,9 @@ ipcraft/
 1. `load_driver()` parses the `*.mm.yml` file.
 2. Constructs `IpCoreDriver` with `AddressBlock` and `Register`/`AsyncRegister`
    instances attached via `setattr`.
-3. Result is a dot-notation API: `driver.BLOCK.REGISTER.FIELD.read()`.
+3. `IpCoreDriver._blocks` (ordered `list[str]`) and `AddressBlock._registers`
+   (ordered `list[str]`) are populated for structured iteration without `dir()`.
+4. Result is a dot-notation API: `driver.BLOCK.REGISTER.FIELD.read()`.
 
 ## Key Patterns
 
@@ -132,6 +150,9 @@ YamlIpCoreParser
   mixes in MemoryMapParserMixin (register/address block parsing)
   mixes in FileSetParserMixin (fileset import handling)
 ```
+
+`ParseDispatcher` is a standalone class (not a mixin) that selects and
+delegates to the appropriate HDL or vendor parser at runtime.
 
 ### Model Validation
 

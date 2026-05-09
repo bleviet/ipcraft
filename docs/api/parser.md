@@ -57,6 +57,39 @@ except ParseError as e:
 
 ---
 
+## `ParseDispatcher`
+
+Auto-detects the source file format and dispatches to the appropriate parser.
+This is the engine behind the multi-format `ipcraft parse` CLI command.
+
+```python
+from ipcraft.parser.vendor.parse_dispatcher import ParseDispatcher, ParseFormatError
+
+dispatcher = ParseDispatcher()
+
+# Detect format without parsing
+fmt = dispatcher.detect_format(Path("my_core.vhd"))   # "vhdl"
+fmt = dispatcher.detect_format(Path("my_core.v"))      # "verilog"
+fmt = dispatcher.detect_format(Path("core_hw.tcl"))   # "hw_tcl"
+fmt = dispatcher.detect_format(Path("component.xml")) # "ipxact"
+
+# Detect and parse in one step
+ip_core = dispatcher.parse(Path("my_core.vhd"), detect_bus=True)
+```
+
+### Supported Formats
+
+| Format string | Triggered by | Parser used |
+|---------------|-------------|-------------|
+| `"vhdl"` | `.vhd`, `.vhdl` | `VHDLParser` + `BusInterfaceDetector` |
+| `"verilog"` | `.v`, `.sv` | `VerilogParser` + `BusInterfaceDetector` |
+| `"hw_tcl"` | `*_hw.tcl`, `*.tcl` | `HwTclParser` |
+| `"ipxact"` | `component.xml` (XML root `<component>`) | `IpXactParser` |
+
+Raises `ParseFormatError` if the format cannot be determined.
+
+---
+
 ## VHDL Parser
 
 ```python
@@ -82,6 +115,25 @@ fails. Extracts:
 - Entity ports -> `Port` objects
 - Generics -> `Parameter` objects
 - Architecture and package declarations
+
+---
+
+## Verilog Parser
+
+```python
+from ipcraft.parser.hdl.verilog_parser import VerilogParser
+
+parser = VerilogParser()
+result = parser.parse_file("module.v")
+
+# result structure:
+# {
+#     "module": IpCore | None,
+# }
+```
+
+Extracts module ports and parameters. Bus interface detection is applied by
+`ParseDispatcher` (same `BusInterfaceDetector` as for VHDL).
 
 ---
 
@@ -118,6 +170,42 @@ Identifies signals by name patterns:
 
 ---
 
+## Intel `_hw.tcl` Parser
+
+```python
+from ipcraft.parser.vendor.hw_tcl_parser import HwTclParser
+
+parser = HwTclParser()
+ip_core = parser.parse_file(Path("my_core_hw.tcl"))
+```
+
+Imports an Intel Platform Designer component description (Tcl script) and
+produces an `IpCore` model with:
+
+- VLNV from `set_module_property DISPLAY_NAME` / `VERSION`
+- Parameters from `add_parameter` declarations
+- Bus interfaces from `add_interface` blocks
+
+---
+
+## Xilinx IP-XACT Parser
+
+```python
+from ipcraft.parser.vendor.ipxact_parser import IpXactParser
+
+parser = IpXactParser()
+ip_core = parser.parse_file(Path("component.xml"))
+```
+
+Imports a Xilinx `component.xml` (IP-XACT 2009/2014 format) and produces an
+`IpCore` model with:
+
+- VLNV from the `<spirit:vendor>` / `<ipxact:vendor>` hierarchy
+- Parameters from `<spirit:parameter>` / `<ipxact:parameter>` elements
+- Bus interfaces from `<spirit:busInterface>` elements
+
+---
+
 ## YAML-to-IP Generator (Reverse Parser)
 
 ```python
@@ -134,4 +222,15 @@ yaml_content = gen.generate(
 ```
 
 Combines `VHDLParser` + `BusInterfaceDetector` to produce IP YAML from VHDL
-source. This is the engine behind the `ipcraft parse` CLI command.
+source. This is the engine behind the legacy `ipcraft parse <file.vhd> -o
+<file.yml>` path.
+
+For the multi-format path, use `ParseDispatcher` + `IpYamlGenerator.generate_from_model()`:
+
+```python
+from ipcraft.parser.vendor.parse_dispatcher import ParseDispatcher
+from ipcraft.generator.yaml.ip_yaml_generator import IpYamlGenerator
+
+ip_core = ParseDispatcher().parse(Path("my_core_hw.tcl"))
+yaml_str = IpYamlGenerator().generate_from_model(ip_core)
+```

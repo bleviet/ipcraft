@@ -1,10 +1,72 @@
 # CLI Reference
 
-IPCraft provides five commands: `new`, `generate`, `parse`, `list-buses`, and `validate`.
+IPCraft provides six commands: `init`, `new`, `generate`, `parse`, `list-buses`, and `validate`.
 
 ```bash
-ipcraft <command> [options]
+ipcraft [--debug] [-v] <command> [options]
 ```
+
+## Global Flags
+
+These flags work on every subcommand:
+
+| Flag | Description |
+|------|-------------|
+| `--debug` | Show the full Python traceback on errors instead of a one-line summary |
+| `-v`, `--verbose` | Enable per-step progress output |
+| `--version` | Print the installed version and exit |
+
+---
+
+## `init` -- Interactive Wizard
+
+Launch a guided TUI wizard that collects project details interactively, then
+scaffolds the YAML files and runs generation automatically. This is the
+recommended starting point for new users.
+
+```bash
+ipcraft init [TEMPLATE.ip.yml]
+```
+
+### Startup Modes
+
+| Mode | How to trigger | Description |
+|------|---------------|-------------|
+| **Fresh** | Run `ipcraft init` with no arguments | Answer a short sequence of questions (name, bus type, vendor, etc.) and generate from scratch |
+| **Template** | Pass an existing `.ip.yml` as the argument | Clone an existing core under a new name without touching the original |
+
+### Fresh Mode — Wizard Steps
+
+1. **Mode selection** — choose *fresh* or pick an example from the built-in catalog
+2. **Bus type** — select from AXI4-Lite, AXI4-Full, AXI-Stream, Avalon-MM, Avalon-ST, or None
+3. **Core name** — used as the filename prefix and VHDL entity name
+4. **Vendor / library / version** — VLNV metadata (defaults provided)
+5. **Output directory** — where to write files (defaults to `.`)
+6. The wizard scaffolds `<name>.ip.yml` and `<name>.mm.yml`, then immediately runs `generate`
+
+### Template Mode
+
+```bash
+# Clone an existing IP core under a new name
+ipcraft init path/to/existing_core.ip.yml
+```
+
+The wizard asks only for the new core name and output directory. All other
+settings are inherited from the source file.
+
+### Examples
+
+```bash
+# Start the interactive wizard (recommended for new users)
+ipcraft init
+
+# Clone an existing IP core as a starting point
+ipcraft init examples/led_controller.ip.yml
+```
+
+!!! note
+    For non-interactive use (CI scripts, Makefiles), use `ipcraft new` +
+    `ipcraft generate` instead.
 
 ---
 
@@ -77,8 +139,10 @@ ipcraft generate <ip_yaml_file> [options]
 | `--testbench` / `--no-testbench` | `--testbench` | Generate cocotb testbench |
 | `--regs` / `--no-regs` | `--regs` | Generate standalone register bank |
 | `--update-yaml` / `--no-update-yaml` | `--update-yaml` | Update IP YAML with fileSets |
-| `--template-dir`, `--methodology` | None | Path to custom Jinja2 template directory (can be used multiple times) |
+| `--template-dir`, `--methodology` | None | Path to custom Jinja2 template directory (can be used multiple times). See [Custom Templates](templates.md). |
 | `--dump-context` | Off | Dump template context to `template_context.json` for template development |
+| `--dry-run` | Off | Preview which files would be written or skipped without touching the filesystem |
+| `--watch` | Off | Watch input YAML files and re-generate automatically on change (Ctrl+C to stop) |
 | `--json` | Off | JSON output for tool integration |
 | `--progress` | Off | Enable progress reporting |
 
@@ -93,6 +157,12 @@ ipcraft generate my_core.ip.yml --output ./build
 
 # Intel-only vendor files, no testbench
 ipcraft generate my_core.ip.yml --vendor intel --no-testbench
+
+# Preview what would be written without touching the filesystem
+ipcraft generate my_core.ip.yml --dry-run
+
+# Watch YAML files and re-generate on every save
+ipcraft generate my_core.ip.yml --watch
 
 # VS Code integration mode
 ipcraft generate my_core.ip.yml --json --progress
@@ -117,10 +187,13 @@ output/
   tb/
     {name}_test.py         # Cocotb testbench
     Makefile               # Simulation makefile
+  docs/
+    {name}_regmap.md       # Markdown register map (summary + bit-field tables)
   intel/
     {name}_hw.tcl          # Platform Designer component
   xilinx/
     component.xml          # IP-XACT component descriptor
+    package_ip.tcl         # Vivado IP packaging script
     xgui/{name}_v*.tcl     # Vivado GUI definition
 ```
 
@@ -152,31 +225,44 @@ See [File Sets in the IP YAML spec](ip-yaml-spec.md#file-sets) for the full
 
 ---
 
-## `parse` -- VHDL to IP YAML
+## `parse` -- Source File to IP YAML
 
-Parse a VHDL file and generate an IP core YAML definition with automatic bus
-interface detection.
+Parse a hardware description file and generate an IP core YAML definition.
+Supports multiple source formats with automatic detection.
 
 ```bash
-ipcraft parse <vhdl_file> [options]
+ipcraft parse <source_file> [options]
 ```
+
+### Supported Input Formats
+
+| Extension / Pattern | Format | Parser |
+|--------------------|--------|--------|
+| `.vhd`, `.vhdl` | VHDL | `VHDLParser` + `BusInterfaceDetector` |
+| `.v`, `.sv` | Verilog / SystemVerilog | `VerilogParser` + `BusInterfaceDetector` |
+| `*_hw.tcl`, `*.tcl` | Intel Platform Designer | `HwTclParser` |
+| `component.xml` | Xilinx IP-XACT | `IpXactParser` |
+
+The format is detected automatically from the file extension and content.
 
 ### Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--output`, `-o` | `{entity}.ip.yml` | Output file path |
+| `--output`, `-o` | Same dir as input | Output directory (or `.yml` path for VHDL legacy mode) |
+| `--mm` | Off | Also generate a `.mm.yml` register-map skeleton alongside the `.ip.yml` |
+| `--dry-run` | Off | Print which files would be written without writing anything |
 | `--vendor` | `user` | VLNV vendor name |
 | `--library` | `ip` | VLNV library name |
 | `--version` | `1.0` | VLNV version |
-| `--no-detect-bus` | Off | Disable bus interface detection |
-| `--memmap FILE` | None | Memory map file to reference |
-| `--force`, `-f` | Off | Overwrite existing output file |
+| `--no-detect-bus` | Off | Disable bus interface detection from port name prefixes |
+| `--memmap FILE` | None | Memory map file to reference (VHDL legacy mode only) |
+| `--force`, `-f` | Off | Overwrite existing output files |
 | `--json` | Off | JSON output for tool integration |
 
-### Auto-Detection
+### Auto-Detection (HDL Files)
 
-The parser recognizes:
+For VHDL and Verilog inputs, the parser recognizes:
 
 | Category | Pattern Examples |
 |----------|-----------------|
@@ -188,8 +274,23 @@ The parser recognizes:
 ### Examples
 
 ```bash
-# Basic parse
+# Parse a VHDL file
 ipcraft parse my_core.vhd
+
+# Parse a Verilog file
+ipcraft parse my_core.v
+
+# Import from Intel Platform Designer component
+ipcraft parse my_core_hw.tcl
+
+# Import from Xilinx IP-XACT
+ipcraft parse component.xml
+
+# Parse and also generate a memory map skeleton
+ipcraft parse my_core.vhd --mm
+
+# Preview what would be written
+ipcraft parse my_core.vhd --dry-run
 
 # Custom VLNV and memory map reference
 ipcraft parse my_core.vhd \

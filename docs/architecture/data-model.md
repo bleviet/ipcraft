@@ -224,7 +224,9 @@ Contains `name`, `description`, and `files: List[File]`.
 | `path` | `str` | Relative file path |
 | `type` | `FileType` | File type enum |
 | `description` | `Optional[str]` | Description |
+| `managed` | `bool` | If `False`, `ipcraft generate` never overwrites this file (default `True`) |
 | `is_include_file` | `bool` | Whether this is an include file |
+| `logical_name` | `str` | Library name (e.g. VHDL work library) |
 
 ### `FileType`
 

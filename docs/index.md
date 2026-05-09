@@ -18,8 +18,9 @@ automates the generation of:
 
 ## Key Features
 
-- **Parse** -- Extract IP core definitions from existing VHDL source files with
-  automatic bus interface detection (AXI4-Lite, AXI-Stream, Avalon-MM).
+- **Parse** -- Extract IP core definitions from existing HDL and vendor source
+  files (VHDL, Verilog/SystemVerilog, Intel `_hw.tcl`, Xilinx `component.xml`)
+  with automatic bus interface detection (AXI4-Lite, AXI-Stream, Avalon-MM).
 - **Generate** -- Produce VHDL, vendor integration files, and testbenches from
   YAML definitions.
 - **Bus Library** -- Standard bus interface definitions with port-level detail.
@@ -32,7 +33,7 @@ automates the generation of:
 
 ```mermaid
 graph LR
-    VHDL["VHDL Source"] -->|parse| YAML["IP YAML"]
+    HDL["HDL/Vendor Source"] -->|parse| YAML["IP YAML"]
     YAML -->|generate| RTL["VHDL RTL"]
     YAML -->|generate| VENDOR["Vendor Files"]
     YAML -->|generate| TB["Cocotb Testbench"]
@@ -42,11 +43,17 @@ graph LR
 ## Quick Example
 
 ```bash
-# Bootstrap a new IP core project with a default bus interface
+# Start an interactive wizard to create a new IP core project
+ipcraft init
+
+# Or scaffold quickly with a default bus interface
 ipcraft new my_core --bus AXI4_LITE
 
-# Parse existing VHDL to YAML specification
-ipcraft parse my_core.vhd
+# Parse existing HDL or vendor files to YAML specification
+ipcraft parse my_core.vhd          # VHDL
+ipcraft parse my_core.v            # Verilog
+ipcraft parse my_core_hw.tcl       # Intel Platform Designer
+ipcraft parse component.xml        # Xilinx IP-XACT
 
 # Generate VHDL and vendor files from YAML
 ipcraft generate my_core.ip.yml --output ./build

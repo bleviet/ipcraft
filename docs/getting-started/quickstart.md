@@ -1,12 +1,19 @@
 # Quick Start
 
-This guide walks through the main workflows: scaffolding a new IP, generating VHDL from a YAML specification, and parsing existing VHDL into a YAML specification.
+This guide walks through the main workflows: scaffolding a new IP, generating VHDL from a YAML specification, and parsing existing source files into a YAML specification.
 
 ## Workflow 1: New IP Core to VHDL
 
 ### 1. Scaffold your IP core
 
-The fastest way to start is using the `new` command, which generates boilerplate YAML files based on standard templates:
+The recommended way to start is the interactive `init` wizard, which guides you
+through every option step-by-step:
+
+```bash
+ipcraft init
+```
+
+If you prefer a one-liner to bootstrap a project immediately:
 
 ```bash
 ipcraft new my_core --bus AXI4_LITE
@@ -90,7 +97,7 @@ Edit the generated `my_core.mm.yml`:
               bits: "[0:0]"
 ```
 
-### 3. Generate VHDL
+### 4. Generate VHDL
 
 ```bash
 ipcraft generate my_core.ip.yml --output ./build
@@ -109,29 +116,38 @@ build/
   tb/
     my_core_test.py
     Makefile
+  docs/
+    my_core_regmap.md
   intel/
     my_core_hw.tcl
   xilinx/
     component.xml
     xgui/my_core_v1_0_0.tcl
+    package_ip.tcl
 ```
 
-## Workflow 2: VHDL to YAML
+## Workflow 2: Source File to YAML
 
-### 1. Parse an existing VHDL entity
+IPCraft can parse multiple source formats. The format is auto-detected from the
+file extension and content.
+
+### 1. Parse an existing source file
 
 ```bash
-ipcraft parse my_core.vhd
+ipcraft parse my_core.vhd          # VHDL entity
+ipcraft parse my_core.v            # Verilog/SystemVerilog module
+ipcraft parse my_core_hw.tcl       # Intel Platform Designer component
+ipcraft parse component.xml        # Xilinx IP-XACT component
 ```
 
-The parser automatically detects:
+The parser automatically detects (for HDL inputs):
 
 - **Bus interfaces** from port prefixes (`s_axi_*`, `m_axis_*`, `avs_*`)
 - **Clocks** from name patterns (`clk`, `i_clk`, `aclk`)
 - **Resets** from name patterns (`rst`, `rst_n`, `aresetn`) with polarity detection
 - **Generics** extracted as parameters
 
-### 2. Customize the output
+### 2. Customise the output
 
 ```bash
 ipcraft parse my_core.vhd \
@@ -139,6 +155,9 @@ ipcraft parse my_core.vhd \
   --library peripherals \
   --version 2.0 \
   --memmap my_core.mm.yml
+
+# Generate a memory-map skeleton alongside the IP YAML (HDL inputs)
+ipcraft parse my_core.vhd --mm
 ```
 
 ## Using the Python API
