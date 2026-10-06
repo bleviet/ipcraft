@@ -57,6 +57,33 @@ def _add_indent_args(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_scaffold_args(p: argparse.ArgumentParser) -> None:
+    """Options of the pack-driven generation engine (shared with the ipcraft-vscode CLI)."""
+    g = p.add_argument_group(
+        "scaffold engine",
+        "Giving any of these options selects the pack-driven engine used by the ipcraft-vscode CLI "
+        "(layout: rtl/, tb/, altera/, xilinx/); without them the classic generator is used.",
+    )
+    g.add_argument("--target", action="append", metavar="VENDOR",
+                   help="Vendor target(s) to scaffold a project for: quartus, vivado "
+                        "(repeatable or comma-separated). Omit for RTL + testbench only.")
+    g.add_argument("--lang", choices=["vhdl", "systemverilog"],
+                   help="HDL language to generate (default: vhdl)")
+    g.add_argument("--pack", metavar="NAME_OR_DIR",
+                   help="Scaffold pack to use (built-in name or pack directory); overrides scaffold_pack "
+                        "in the .ip.yml. Built-ins: builtin-minimal (default), builtin-ipcraft, example-*")
+    g.add_argument("--quartus-device", metavar="PART", help="Quartus device part (default: 5CSEBA6U23I7)")
+    g.add_argument("--vivado-part", metavar="PART", help="Vivado part (default: xc7z020clg484-1)")
+    g.add_argument("--framework", choices=["cocotb", "vunit"], help="Testbench framework (default: cocotb)")
+    g.add_argument("--engine-sim", dest="engine_sim", choices=["ghdl", "icarus", "verilator", "questa"],
+                   help="Simulation engine (default: ghdl)")
+
+
+def _uses_scaffold_engine(args) -> bool:
+    return any(getattr(args, name, None) for name in
+               ("target", "lang", "pack", "quartus_device", "vivado_part", "framework", "engine_sim"))
+
+
 def _positive_int(value: str) -> int:
     n = int(value)
     if n < 1:
@@ -280,6 +307,67 @@ def _build_files(args, output_base: Path):
     return ip_core, bus_type, gen, all_files
 
 
+def _run_scaffold_generate(args, output_base: Path) -> dict:
+    """Generate with the pack-driven engine (feature parity with the ipcraft-vscode CLI)."""
+    from ipcraft.scaffold.run import run_generate
+
+    t_start = time.monotonic()
+    log(f"Generating from {args.input} with the scaffold engine...", args)
+    if getattr(args, "dry_run", False):
+        result = run_generate(args, str(output_base), dry_run=True)
+        contents = result["generatedContents"]
+        protected = set(result.get("protectedPaths") or [])
+        changed, unchanged, skipped = [], [], []
+        for rel in sorted(contents):
+            full = output_base / rel
+            if rel in protected:
+                skipped.append(rel)
+            elif full.exists() and full.read_text(encoding="utf-8", errors="replace") == contents[rel]:
+                unchanged.append(rel)
+            else:
+                changed.append(rel)
+        if getattr(args, "json", False):
+            print(json.dumps({"success": True, "dryRun": True, "wouldWrite": changed, "unchanged": unchanged,
+                              "protected": skipped}))
+        else:
+            print(f"Dry run — nothing written.  Target: {output_base}\n")
+            for title, group in (("Would write (new or changed):", changed), ("\nWould skip (content unchanged):", unchanged),
+                                 ("\nWould skip (unmanaged — user-owned):", skipped)):
+                if group:
+                    print(title)
+                    for f in group:
+                        print(f"  {f}")
+        return {}
+    result = run_generate(args, str(output_base))
+    written = {rel: path for rel, path in (result.get("files") or {}).items()}
+    for w in result.get("warnings") or []:
+        print(f"Warning: {w}", file=sys.stderr)
+    if getattr(args, "dump_context", False):
+        _dump_scaffold_context(args, output_base)
+    if getattr(args, "json", False):
+        print(json.dumps({"success": True, "files": written, "count": len(written), "busType": result.get("busType"),
+                          "warnings": result.get("warnings") or []}))
+    else:
+        print(f"Generated {len(written)} file(s) into {output_base.resolve()}")
+        for f in sorted(written):
+            print(f"  {f}")
+        log(f"done in {time.monotonic() - t_start:.1f}s", args)
+    return written
+
+
+def _dump_scaffold_context(args, output_base: Path) -> None:
+    from ipcraft.scaffold.context import build_template_context
+    from ipcraft.scaffold.loader import load_bus_library, load_ip_core_data
+    from ipcraft.scaffold.registers import get_bus_type_for_template
+
+    ip_core = load_ip_core_data(args.input)
+    library = load_bus_library(args.input, ip_core)
+    ctx = build_template_context(ip_core, get_bus_type_for_template(ip_core, library), args.input, library)
+    out = output_base / "template_context.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(ctx, indent=2, default=str), encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Subcommand: generate  (core logic extracted for reuse by --watch and init)
 # ---------------------------------------------------------------------------
@@ -291,6 +379,9 @@ def _run_generate_core(args, output_base: Path) -> dict:
     Returns an empty dict on --dry-run (nothing written).
     """
     t_start = time.monotonic()
+
+    if _uses_scaffold_engine(args):
+        return _run_scaffold_generate(args, output_base)
 
     if not getattr(args, "json", False):
         print(f"Generating from {args.input}...", end=" ", flush=True)
@@ -454,9 +545,37 @@ def _list_files(root: Path, prefix: str) -> list:
     return sorted(p.relative_to(root).as_posix() for p in base.rglob("*") if p.is_file())
 
 
+def _cmd_verify_scaffold(args, generated_dir: Path) -> None:
+    from ipcraft.scaffold.run import run_verify
+
+    try:
+        result = run_verify(args, str(generated_dir))
+    except Exception as e:  # noqa: BLE001
+        err(f"Verification failed: {e}", args, e)
+        return
+    if result.get("error") is not None and not result["success"] and "staleFiles" not in result:
+        err(f"Verification failed: {result['error']}", args)
+        return
+    for w in result.get("warnings") or []:
+        print(f"Warning: {w}", file=sys.stderr)
+    stale = result["staleFiles"]
+    if args.json:
+        print(json.dumps({"success": not stale, "staleFiles": stale}))
+    elif stale:
+        print(f"Stale: {len(stale)} file(s) differ from a fresh generation:", file=sys.stderr)
+        for f in stale:
+            print(f"  {f}", file=sys.stderr)
+    else:
+        print(f"Up to date: {generated_dir.resolve()} matches a fresh generation.")
+    if stale:
+        sys.exit(1)
+
+
 def cmd_verify(args):
     """Check that a generated directory matches a fresh generation (drift check)."""
     generated_dir = Path(args.generated_dir)
+    if _uses_scaffold_engine(args):
+        return _cmd_verify_scaffold(args, generated_dir)
     try:
         ip_core, _bus, _gen, fresh = _build_files(args, generated_dir)
         unmanaged = _get_unmanaged_files(ip_core)
@@ -861,7 +980,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     gen_p.add_argument("input", help="IP core YAML file (.ip.yml)")
-    gen_p.add_argument("--output", "-o", help="Output directory (default: same directory as input)")
+    gen_p.add_argument("--output", "--out", "-o", dest="output",
+                       help="Output directory (default: same directory as input)")
     gen_p.add_argument(
         "--vendor",
         default="both",
@@ -926,6 +1046,7 @@ def main():
         ),
     )
     _add_indent_args(gen_p)
+    _add_scaffold_args(gen_p)
     _add_common_args(gen_p)
     gen_p.set_defaults(func=cmd_generate)
 
@@ -951,6 +1072,7 @@ def main():
                        help="Custom Jinja2 template directory (repeatable)")
     ver_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     _add_indent_args(ver_p)
+    _add_scaffold_args(ver_p)
     _add_common_args(ver_p)
     ver_p.set_defaults(func=cmd_verify)
 
