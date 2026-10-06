@@ -240,15 +240,58 @@ def normalize_sources(*loads: Dict[str, list]) -> dict:
 _default_sources_cache: Optional[Dict[str, list]] = None
 
 
+def ipcraft_config_dir() -> str:
+    """OS-specific application data directory shared with the VS Code extension."""
+    import sys
+
+    home = os.path.expanduser("~")
+    if sys.platform == "win32":
+        return os.path.join(os.environ.get("APPDATA") or os.path.join(home, "AppData", "Roaming"), "ipcraft")
+    if sys.platform == "darwin":
+        return os.path.join(home, "Library", "Application Support", "ipcraft")
+    return os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(home, ".config"), "ipcraft")
+
+
+def vivado_interface_cache_dir(version: Optional[str] = None) -> str:
+    from urllib.parse import quote
+
+    parts = [ipcraft_config_dir(), "vivado"] + ([quote(version, safe="!~*'()")] if version else []) + ["bus_definitions"]
+    return os.path.join(*parts)
+
+
+def resolve_vivado_cache_version(resource_path: Optional[str], kind: str = "interfaces") -> Optional[str]:
+    """Version of the Vivado cache selected by the last successful scan for this resource (or ``None``)."""
+    import hashlib
+
+    if not resource_path:
+        return None
+    scope = resource_path
+    scope_hash = hashlib.sha256(scope.encode("utf-8")).hexdigest()
+    sel_path = os.path.join(ipcraft_config_dir(), "vivado", "cache-selections", f"{scope_hash}.{kind}.json")
+    try:
+        selection = json.loads(Path(sel_path).read_text(encoding="utf-8"))
+        if (selection.get("formatVersion") == 1 and selection.get("scope") == scope
+                and selection.get("kind") == kind and selection.get("pinnedVersion") == ""):
+            return selection.get("selectedVersion")
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def load_bus_library(input_path: Optional[str] = None, ip_core: Optional[dict] = None,
-                     extra_dirs: Optional[List[str]] = None) -> dict:
+                     extra_dirs: Optional[List[str]] = None, include_vivado_cache: bool = True) -> dict:
     """The normalized library used for an IP core: built-ins, configured dirs and ``useBusLibrary``."""
     global _default_sources_cache
     if _default_sources_cache is None:
         _default_sources_cache = load_default_sources()
     loads = [_default_sources_cache]
-    if extra_dirs:
-        loads.append(load_from_directories(list(extra_dirs), "configured"))
+    configured_dirs = list(extra_dirs or [])
+    if input_path and include_vivado_cache:
+        cache_dir = vivado_interface_cache_dir(resolve_vivado_cache_version(os.path.abspath(input_path)))
+        if os.path.isdir(cache_dir):
+            configured_dirs.append(cache_dir)
+    if configured_dirs:
+        loads.append(load_from_directories(configured_dirs, "configured"))
     use_lib = str((ip_core or {}).get("useBusLibrary") or "")
     if use_lib and input_path:
         loads.append(load_from_directories([os.path.abspath(os.path.join(os.path.dirname(input_path), use_lib))], "ipLocal"))
