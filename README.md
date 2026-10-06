@@ -4,8 +4,10 @@ Python library and CLI for IP Core specifications (IPCraft).
 
 ## Features
 
-- **Hardware Generators**: VHDL/Verilog generation from YAML.
-- **Parsers**: VHDL/Verilog parsing to YAML.
+- **Hardware Generators**: VHDL/SystemVerilog generation from YAML, cocotb/VUnit testbenches, Quartus and Vivado packaging and projects.
+- **Companion of the [ipcraft-vscode](https://github.com/bleviet/ipcraft-vscode) CLI**: `generate`, `verify`, `migrate`, `import`, scaffold packs
+  and bus contracts behave exactly like the extension's engine — output is byte-identical.
+- **Parsers/Importers**: VHDL, SystemVerilog, Platform Designer `_hw.tcl` and Vivado `component.xml` to YAML.
 - **Bus Library**: Standard bus interface definitions (AXI4-Lite, Avalon-MM).
 - **Project Scaffolding**: Create new IP cores from templates.
 
@@ -26,6 +28,17 @@ pip install -e .
 ## CLI Usage
 
 Command-line tool for IP core scaffolding and generation.
+
+Quick tour of the extension-compatible commands (see `docs/user-guide/cli.md` for all options):
+
+```bash
+uv run ipcraft generate core.ip.yml --lang systemverilog --pack builtin-ipcraft --target quartus,vivado --out gen/
+uv run ipcraft verify   core.ip.yml gen/ --lang systemverilog --pack builtin-ipcraft --target quartus,vivado
+uv run ipcraft import   core_hw.tcl            # also: .vhd, .sv, component.xml
+uv run ipcraft migrate  core.ip.yml            # upgrade to the latest format version
+uv run ipcraft pack export builtin-ipcraft my-pack/   # start your own scaffold pack
+uv run ipcraft instance rtl/core.vhd           # component instantiation snippet
+```
 
 ### `parse` - VHDL to IP YAML
 
