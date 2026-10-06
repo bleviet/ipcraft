@@ -54,11 +54,45 @@ class _JsYamlDumper(yaml.SafeDumper):
         return True
 
 
+# js-yaml decides whether to quote a string by testing it against its implicit-type resolvers (core
+# schema regexes, not PyYAML's YAML 1.1 ones) and additionally quotes the YAML 1.1 booleans y/Y/n/N.
+_JS_INT = re.compile(r"^(?:[-+]?[0-9]+|0b[01]+|0o[0-7]+|0x[0-9a-fA-F]+|[-+]?[1-9][0-9]*(?::[0-5]?[0-9])+)$")
+_JS_FLOAT = re.compile(r"^(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$")
+_JS_BOOL = re.compile(r"^(?:yes|Yes|YES|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF|y|Y|n|N)$")
+
+
+def _rebuild_resolvers() -> None:
+    implicit: dict = {}
+    for first, entries in yaml.SafeDumper.yaml_implicit_resolvers.items():
+        for tag, regexp in entries:
+            if tag in ("tag:yaml.org,2002:int", "tag:yaml.org,2002:float", "tag:yaml.org,2002:bool"):
+                continue
+            implicit.setdefault(first, []).append((tag, regexp))
+    for first in list("-+0123456789."):
+        implicit.setdefault(first, []).append(("tag:yaml.org,2002:int", _JS_INT))
+        implicit.setdefault(first, []).append(("tag:yaml.org,2002:float", _JS_FLOAT))
+    for first in list("yYnNtTfFoO"):
+        implicit.setdefault(first, []).append(("tag:yaml.org,2002:bool", _JS_BOOL))
+    _JsYamlDumper.yaml_implicit_resolvers = implicit
+
+
+_rebuild_resolvers()
+
+
 def _represent_none(dumper: yaml.SafeDumper, _data: None):
     return dumper.represent_scalar("tag:yaml.org,2002:null", "null")
 
 
+def _represent_str(dumper: yaml.SafeDumper, data: str):
+    if "\n" in data and "\r" not in data and not data.startswith((" ", "\n")) and "\t" not in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    if data == "--":
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="'")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
 _JsYamlDumper.add_representer(type(None), _represent_none)
+_JsYamlDumper.add_representer(str, _represent_str)
 
 
 def js_yaml_dump(data: Any) -> str:

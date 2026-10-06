@@ -1579,3 +1579,157 @@ def reconstruct_bus_port_name_set(iface: dict, library: dict) -> Optional[set]:
             continue
         names.add(f"{prefix}{port['physicalSuffix']}".lower())
     return names
+
+
+# ---------------------------------------------------------------------------
+# Vendor import helpers (observedPorts.ts / vendorProperties.ts)
+# ---------------------------------------------------------------------------
+
+
+def reconcile_observed_bus_ports(contract_ports: Sequence[dict], observed_ports: Sequence[dict], physical_prefix: str) -> dict:
+    """Reconcile vendor-observed ports with canonical contract selections."""
+    present: set = set()
+    width_overrides: Dict[str, Any] = {}
+    name_overrides: Dict[str, str] = {}
+    polarity_overrides: Dict[str, str] = {}
+    for observed in observed_ports:
+        match = match_bus_port_role(contract_ports, observed["logicalName"])
+        if not match:
+            continue
+        definition = match["port"]
+        present.add(definition["name"].upper())
+        ow = observed.get("width")
+        if ow is not None and isinstance(definition.get("width"), (int, float)) and not isinstance(definition.get("width"), bool) \
+                and (isinstance(ow, str) or ow != definition["width"]):
+            width_overrides[definition["name"]] = ow
+        elif ow is not None:
+            width_overrides.pop(definition["name"], None)
+        phys = observed["physicalName"]
+        suffix = phys[len(physical_prefix):] if phys.startswith(physical_prefix) else phys
+        selected = match.get("polarity") or (definition.get("polarity") or {}).get("default")
+        default_suffix = resolve_default_physical_suffix(definition, selected)
+        if suffix != default_suffix:
+            name_overrides[definition["name"]] = suffix
+        else:
+            name_overrides.pop(definition["name"], None)
+        if definition.get("polarity") and selected is not None and selected != definition["polarity"]["default"]:
+            polarity_overrides[definition["name"]] = selected
+        else:
+            polarity_overrides.pop(definition["name"], None)
+    use_optional = [p["name"] for p in contract_ports if p["presence"] == "optional" and p["name"].upper() in present]
+    out: Dict[str, Any] = {}
+    if use_optional:
+        out["useOptionalPorts"] = use_optional
+    if width_overrides:
+        out["portWidthOverrides"] = width_overrides
+    if name_overrides:
+        out["portNameOverrides"] = name_overrides
+    if polarity_overrides:
+        out["portPolarityOverrides"] = polarity_overrides
+    return out
+
+
+def _parse_vendor_boolean(raw: str, prop: str, location: str) -> bool:
+    if re.match(r"^(?:1|true)$", raw, re.IGNORECASE):
+        return True
+    if re.match(r"^(?:0|false)$", raw, re.IGNORECASE):
+        return False
+    raise ValueError(f"{location} has invalid boolean value '{raw}' for {prop}.")
+
+
+def _parse_vendor_integer(raw: str, prop: str, location: str) -> int:
+    from .jsutil import js_number
+
+    numeric = None if raw.strip() == "" else js_number(raw)
+    if numeric is not None and _is_safe_int(numeric):
+        return int(numeric)
+    raise ValueError(f"{location} has invalid integer value '{raw}' for {prop}.")
+
+
+def import_vendor_contract_metadata(contract: dict, raw_properties: Mapping[str, str],
+                                    mirrored_properties: Optional[Mapping[str, str]] = None,
+                                    symbolic_properties: Optional[set] = None,
+                                    static_properties: Optional[Mapping[str, str]] = None,
+                                    data_width: Any = None, location: str = "") -> dict:
+    warnings: List[str] = []
+    is_symbol_lane = data_lane_kind(contract) == "symbol"
+
+    def literal_or_skip(raw: Optional[str], name: str, parse):
+        if raw is None:
+            return None
+        value_location = f"{location}.parameters.{name}"
+        if not (symbolic_properties and name in symbolic_properties):
+            return parse(raw, name, value_location)
+        try:
+            return parse(raw, name, value_location)
+        except ValueError:
+            fallback = (static_properties or {}).get(name)
+            warnings.append(
+                f"{value_location}: computed value '{raw}' is not a literal and was not imported; set {name} in the .ip.yml if needed."
+                if fallback is None else
+                f"{value_location}: computed value '{raw}' is not a literal; imported the static default '{fallback}'.")
+            return None if fallback is None else parse(fallback, name, value_location)
+
+    current_raw = raw_properties.get("dataBitsPerSymbol") if is_symbol_lane else None
+    legacy_raw = raw_properties.get("bitsPerSymbol") if is_symbol_lane else None
+    current = literal_or_skip(current_raw, "dataBitsPerSymbol", _parse_vendor_integer)
+    legacy = literal_or_skip(legacy_raw, "bitsPerSymbol", _parse_vendor_integer)
+    if current is not None and legacy is not None and current != legacy:
+        raise ValueError(f"{location} declares conflicting dataBitsPerSymbol ('{current_raw}') and bitsPerSymbol ('{legacy_raw}').")
+    for name in (mirrored_properties or {}):
+        if name != "endianness" and name not in contract["interfaceProperties"]:
+            raise ValueError(f"{location}.mirror.{name} is not declared by the bus contract.")
+
+    def parse_property(raw: str, name: str, value_location: str):
+        decl = contract["interfaceProperties"][name]
+        if decl["type"] == "integer":
+            return _parse_vendor_integer(raw, name, value_location)
+        if decl["type"] == "boolean":
+            return _parse_vendor_boolean(raw, name, value_location)
+        return raw
+
+    standard: Dict[str, Any] = {}
+    for name in contract["interfaceProperties"]:
+        if name == "dataBitsPerSymbol":
+            raw = current_raw if current_raw is not None else legacy_raw
+            value = current if current is not None else legacy
+        else:
+            raw = raw_properties.get(name)
+            value = literal_or_skip(raw, name, lambda v, n, loc, _n=name: parse_property(v, _n, f"{location}.parameters.{_n}"))
+        if raw is None or value is None:
+            continue
+        standard[name] = value
+        mirrored_raw = (mirrored_properties or {}).get(name)
+        if mirrored_raw is not None:
+            mirrored = parse_property(mirrored_raw, name, f"{location}.mirror.{name}")
+            if standard[name] != mirrored:
+                raise ValueError(f"{location}.{name}: standard value '{raw}' conflicts with IPCraft mirror '{mirrored_raw}'")
+    interface_properties: Dict[str, Any] = {}
+    if mirrored_properties is not None:
+        for name in contract["interfaceProperties"]:
+            raw = mirrored_properties.get(name)
+            if raw is not None:
+                interface_properties[name] = parse_property(raw, name, f"{location}.mirror.{name}")
+    else:
+        interface_properties.update(standard)
+    if (mirrored_properties is None and is_symbol_lane and "symbolsPerBeat" not in interface_properties
+            and _is_number(interface_properties.get("dataBitsPerSymbol")) and _is_number(data_width)
+            and data_width % interface_properties["dataBitsPerSymbol"] == 0):
+        interface_properties["symbolsPerBeat"] = _int_if_whole(data_width / interface_properties["dataBitsPerSymbol"])
+    ordering = raw_properties.get("firstSymbolInHighOrderBits") if is_symbol_lane else None
+    first_symbol_high = literal_or_skip(ordering, "firstSymbolInHighOrderBits", _parse_vendor_boolean)
+    standard_endianness = None if first_symbol_high is None else ("big" if first_symbol_high else "little")
+    mirrored_endianness = (mirrored_properties or {}).get("endianness")
+    if mirrored_endianness is not None and mirrored_endianness not in ("big", "little"):
+        raise ValueError(f"{location}.mirror.endianness has invalid value '{mirrored_endianness}'; expected 'big' or 'little'.")
+    if standard_endianness is not None and mirrored_endianness is not None and standard_endianness != mirrored_endianness:
+        raise ValueError(f"{location}.endianness: standard value '{standard_endianness}' conflicts with IPCraft mirror '{mirrored_endianness}'")
+    endianness = mirrored_endianness if mirrored_properties is not None else standard_endianness
+    out: Dict[str, Any] = {}
+    if interface_properties:
+        out["interfaceProperties"] = interface_properties
+    if endianness is not None:
+        out["endianness"] = endianness
+    if warnings:
+        out["warnings"] = warnings
+    return out
