@@ -21,6 +21,7 @@ dependencies = [
     "cocotb>=1.9.0",
     "cocotbext-axi>=0.1.24",
     "jsonschema>=4.23.0",
+    "ruamel-yaml>=0.18.16",
 ]
 
 [tool.uv.sources]

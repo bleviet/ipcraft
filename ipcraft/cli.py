@@ -74,6 +74,7 @@ def _add_scaffold_args(p: argparse.ArgumentParser) -> None:
                         "in the .ip.yml. Built-ins: builtin-minimal (default), builtin-ipcraft, example-*")
     g.add_argument("--quartus-device", metavar="PART", help="Quartus device part (default: 5CSEBA6U23I7)")
     g.add_argument("--vivado-part", metavar="PART", help="Vivado part (default: xc7z020clg484-1)")
+    g.add_argument("--docs", action="store_true", help="Also generate the Markdown IP datasheet (docs/<name>_datasheet.md)")
     g.add_argument("--framework", choices=["cocotb", "vunit"], help="Testbench framework (default: cocotb)")
     g.add_argument("--engine-sim", dest="engine_sim", choices=["ghdl", "icarus", "verilator", "questa"],
                    help="Simulation engine (default: ghdl)")
@@ -81,7 +82,7 @@ def _add_scaffold_args(p: argparse.ArgumentParser) -> None:
 
 def _uses_scaffold_engine(args) -> bool:
     return any(getattr(args, name, None) for name in
-               ("target", "lang", "pack", "quartus_device", "vivado_part", "framework", "engine_sim"))
+               ("target", "lang", "pack", "quartus_device", "vivado_part", "framework", "engine_sim", "docs"))
 
 
 def _positive_int(value: str) -> int:
@@ -620,39 +621,113 @@ def cmd_verify(args):
 # ---------------------------------------------------------------------------
 
 def cmd_migrate(args):
-    """Convert legacy snake_case keys in .ip.yml / .mm.yml files to camelCase."""
-    from ipcraft.migrate import migrate_ip_core_yaml, migrate_memory_map_yaml
+    """Upgrade .ip.yml files to the latest format and convert legacy snake_case keys."""
+    from ipcraft.migrate import migrate_ip_core_yaml, migrate_memory_map_yaml, migrate_vendor_to_targets
+    from ipcraft.scaffold.loader import load_bus_library
 
     exit_code = 0
     results = []
     for name in args.paths:
         path = Path(name)
+        entry = {"path": name}
         try:
             text = path.read_text()
             is_mm = name.lower().endswith((".mm.yml", ".mm.yaml"))
-            res = (migrate_memory_map_yaml if is_mm else migrate_ip_core_yaml)(text)
-            if not res.changed:
+            notes: list = []
+            if is_mm:
+                res = migrate_memory_map_yaml(text)
+                new_text, changed = res.text, res.changed
+                from_v = to_v = None
+            else:
+                import yaml as _yaml
+
+                data = _yaml.safe_load(text)
+                if not isinstance(data, dict):
+                    raise ValueError("Invalid YAML: must be an object")
+                library = load_bus_library(str(path.resolve()), data)
+                res = migrate_ip_core_yaml(text, library)
+                new_text, changed, from_v, to_v = res.text, res.changed, res.from_version, res.to_version
+                if args.vendor_targets:
+                    v_changed, v_text, notes = migrate_vendor_to_targets(new_text)
+                    if v_changed:
+                        new_text, changed = v_text, True
+            versions = f" ({from_v} -> {to_v}, {res.mutation_count} change(s))" if from_v and from_v != to_v else None
+            if not changed:
                 status = "upToDate"
-                print(f"Up to date: {name}") if not args.json else None
+                entry.update(version=to_v)
+                if not args.json:
+                    print(f"Up to date: {name}" + (f" ({to_v})" if to_v else ""))
             elif args.check:
                 status = "needsUpgrade"
                 exit_code = 1
-                print(f"Needs upgrade: {name}") if not args.json else None
-            else:
-                path.write_text(res.text)
-                status = "upgraded"
+                entry.update(fromVersion=from_v, toVersion=to_v)
                 if not args.json:
-                    print(f"Converted legacy keys in {name} ({res.mutation_count} change(s))")
-            results.append({"path": name, "status": status, "mutationCount": res.mutation_count})
+                    print(f"Needs upgrade: {name}" + (f" ({from_v} -> {to_v})" if from_v and from_v != to_v else ""))
+            else:
+                path.write_text(new_text)
+                status = "upgraded"
+                entry.update(fromVersion=from_v, toVersion=to_v, mutationCount=res.mutation_count, notes=notes)
+                if not args.json:
+                    if versions:
+                        print(f"Upgraded {name}{versions}")
+                    else:
+                        print(f"Converted legacy keys in {name} ({res.mutation_count} change(s))")
+                    for n in notes:
+                        print(f"  {n}")
+            entry["status"] = status
         except Exception as e:  # noqa: BLE001 - report per file, keep going
             exit_code = 1
-            results.append({"path": name, "status": "error", "error": str(e)})
+            entry.update(status="error", error=str(e))
             if not args.json:
                 print(f"Error: {name}: {e}", file=sys.stderr)
+        results.append(entry)
     if args.json:
         print(json.dumps({"success": exit_code == 0, "results": results}))
     if exit_code:
         sys.exit(exit_code)
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: pack / preview-template  (scaffold-pack tooling)
+# ---------------------------------------------------------------------------
+
+def cmd_pack(args):
+    """List built-in scaffold packs or export one for editing."""
+    from ipcraft.scaffold import packtools
+
+    try:
+        if args.pack_command == "list":
+            packs = packtools.list_packs(extra_dirs=args.pack_dir or [])
+            if args.json:
+                print(json.dumps({"success": True, "packs": packs}))
+            else:
+                width = max((len(p["name"]) for p in packs), default=0)
+                for p in packs:
+                    print(f"  {p['name']:<{width}}  [{p['category']}]  {p['description']}")
+        else:
+            result = packtools.export_pack(args.name, args.dest)
+            if args.json:
+                print(json.dumps({"success": True, **result}))
+            else:
+                n = len(result["templates"])
+                print(f"✓ Exported pack '{args.name}' to {result['dest']}"
+                      + (f" (copied {n} template{'s' if n != 1 else ''} for editing)" if n else ""))
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        err(f"Pack command failed: {e}", args, e)
+
+
+def cmd_preview_template(args):
+    """Render a .j2 template against an IP core's template context."""
+    from ipcraft.scaffold import packtools
+
+    try:
+        print(packtools.preview_template(args.template, args.input), end="")
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        err(f"Template preview failed: {e}", args, e)
 
 
 # ---------------------------------------------------------------------------
@@ -1079,14 +1154,38 @@ def main():
     # ---- migrate ----
     mig_p = subparsers.add_parser(
         "migrate",
-        help="Convert legacy snake_case keys in .ip.yml / .mm.yml files to camelCase",
+        help="Upgrade .ip.yml to the latest format version and convert legacy snake_case keys",
     )
     mig_p.add_argument("paths", nargs="+", metavar="FILE", help=".ip.yml / .mm.yml files to convert")
+    mig_p.add_argument("--vendor-targets", action="store_true",
+                       help="Also rewrite the legacy 'vendor: altera|xilinx|both' field to 'targets: [...]'")
     mig_p.add_argument("--check", action="store_true",
                        help="Report files needing conversion without writing; exit 1 if any do")
     mig_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     _add_common_args(mig_p)
     mig_p.set_defaults(func=cmd_migrate)
+
+    # ---- pack ----
+    pack_p = subparsers.add_parser("pack", help="List or export scaffold packs")
+    pack_sub = pack_p.add_subparsers(dest="pack_command", required=True)
+    pl = pack_sub.add_parser("list", help="List the built-in scaffold packs")
+    pl.add_argument("--pack-dir", action="append", metavar="DIR", help="Also list packs found in DIR (repeatable)")
+    pl.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_common_args(pl)
+    pl.set_defaults(func=cmd_pack)
+    pe = pack_sub.add_parser("export", help="Copy a built-in pack (and the templates it uses) to a directory for editing")
+    pe.add_argument("name", help="Built-in pack name, e.g. builtin-ipcraft")
+    pe.add_argument("dest", help="Destination directory for the exported pack")
+    pe.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_common_args(pe)
+    pe.set_defaults(func=cmd_pack)
+
+    # ---- preview-template ----
+    pv = subparsers.add_parser("preview-template", help="Render a .j2 template against an IP core's template context")
+    pv.add_argument("template", help="Template file (.j2)")
+    pv.add_argument("input", help="IP core YAML file (.ip.yml)")
+    _add_common_args(pv)
+    pv.set_defaults(func=cmd_preview_template, json=False)
 
     # ---- parse ----
     parse_p = subparsers.add_parser(

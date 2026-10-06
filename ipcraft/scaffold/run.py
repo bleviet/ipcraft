@@ -37,6 +37,8 @@ def build_generate_options(args: Any) -> Dict[str, Any]:
         "includeQuartusProject": include_quartus,
         "includeVivadoProject": include_vivado,
     }
+    if getattr(args, "docs", False):
+        opts["includeDocs"] = True
     if getattr(args, "framework", None):
         opts["framework"] = args.framework
     if getattr(args, "engine_sim", None):

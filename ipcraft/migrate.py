@@ -9,8 +9,10 @@ exists on the same mapping.
 
 from __future__ import annotations
 
+import io
+import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -48,11 +50,18 @@ RESET_KEYS = {"associated_clock": "associatedClock"}
 _Edit = Tuple[int, int, Optional[str]]
 
 
+IP_CORE_FORMAT_VERSIONS = ["1.0", "1.1"]
+IP_CORE_FORMAT_VERSION = "1.1"
+IP_CORE_LEGACY_FORMAT_VERSION = "1.0"
+
+
 @dataclass
 class MigrationResult:
     text: str
     changed: bool
     mutation_count: int
+    from_version: Optional[str] = None
+    to_version: Optional[str] = None
 
 
 def _key(pair: Tuple[yaml.Node, yaml.Node]) -> Optional[str]:
@@ -194,9 +203,134 @@ def _migrate(text: str, kind: str) -> MigrationResult:
     return MigrationResult(r.apply(), True, count)
 
 
-def migrate_ip_core_yaml(text: str) -> MigrationResult:
-    """Convert legacy snake_case keys in an ``.ip.yml`` document."""
-    return _migrate(text, "ipCore")
+def detect_indent_seq(text: str) -> bool:
+    """Whether sequence items are indented relative to their parent key (port of ``detectIndentSeq``)."""
+    m = re.search(r"^([ \t]*)(?![#\s-])[^\n]*:[ \t]*\n(?:[ \t]*(?:#[^\n]*)?\n)*([ \t]*)- ", text, re.MULTILINE)
+    return len(m.group(2)) > len(m.group(1)) if m else True
+
+
+def _round_trip_yaml(text: str):
+    from ruamel.yaml import YAML
+
+    y = YAML(typ="rt")
+    y.preserve_quotes = True
+    y.width = 4096
+    if detect_indent_seq(text):
+        y.indent(mapping=2, sequence=4, offset=2)
+    else:
+        y.indent(mapping=2, sequence=2, offset=0)
+    return y
+
+
+def _to_ruamel(value: Any) -> Any:
+    from ruamel.yaml.comments import CommentedMap, CommentedSeq
+
+    if isinstance(value, dict):
+        m = CommentedMap()
+        for k, v in value.items():
+            m[k] = _to_ruamel(v)
+        return m
+    if isinstance(value, (list, tuple)):
+        sq = CommentedSeq()
+        for v in value:
+            sq.append(_to_ruamel(v))
+        return sq
+    return value
+
+
+def _apply_mutations(text: str, mutations: List[Tuple[list, Any]], stamp_version: str) -> str:
+    """Apply ``(path, value)`` edits (``value is None`` deletes) and stamp ``apiVersion`` after ``vlnv``."""
+    from ruamel.yaml.scalarstring import SingleQuotedScalarString
+
+    y = _round_trip_yaml(text)
+    doc = y.load(text)
+    if not hasattr(doc, "items"):
+        raise ValueError("Invalid YAML: must be an object")
+    for path, value in mutations:
+        node = doc
+        for part in path[:-1]:
+            node = node[part]
+        key = path[-1]
+        if value is None:
+            if key in node:
+                del node[key]
+        else:
+            node[key] = _to_ruamel(value)
+    stamp = SingleQuotedScalarString(stamp_version)
+    if "apiVersion" in doc:
+        doc["apiVersion"] = stamp
+    else:
+        keys = list(doc.keys())
+        pos = keys.index("vlnv") + 1 if "vlnv" in keys else 0
+        doc.insert(pos, "apiVersion", stamp)
+    out = io.StringIO()
+    y.dump(doc, out)
+    return out.getvalue()
+
+
+def _read_version(data: dict) -> str:
+    declared = data.get("apiVersion")
+    if declared is None:
+        return IP_CORE_LEGACY_FORMAT_VERSION
+    if declared in IP_CORE_FORMAT_VERSIONS:
+        return declared
+    if not isinstance(declared, str):
+        raise ValueError(f"apiVersion must be a quoted string such as '{IP_CORE_FORMAT_VERSION}' (found {declared!r}).")
+    raise ValueError(f"This file declares apiVersion {declared}, but this IPCraft supports up to "
+                     f"{IP_CORE_FORMAT_VERSION}. Upgrade IPCraft to open it.")
+
+
+def migrate_ip_core_yaml(text: str, library: Optional[dict] = None) -> MigrationResult:
+    """Convert legacy snake_case keys; with a bus ``library`` also upgrade to the latest format version.
+
+    The upgrade (``apiVersion`` 1.0 -> 1.1) canonicalizes every bus interface against its bus contract
+    (e.g. Avalon-MM ``*_n`` ports become ``portPolarityOverrides``) and stamps ``apiVersion``.
+    """
+    renamed = _migrate(text, "ipCore")
+    if library is None:
+        return renamed
+    try:
+        parsed = yaml.safe_load(renamed.text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Invalid YAML: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("Invalid YAML: must be an object")
+    from_version = _read_version(parsed)
+    if from_version == IP_CORE_FORMAT_VERSION:
+        return MigrationResult(renamed.text, renamed.changed, renamed.mutation_count, from_version, from_version)
+
+    from .scaffold.buscontracts import canonicalize_bus_interface_ports, canonicalize_bus_type
+
+    mutations: List[Tuple[list, Any]] = []
+    for index, bus in enumerate(parsed.get("busInterfaces") or []):
+        if not isinstance(bus, dict):
+            continue
+        match = canonicalize_bus_type(str(bus.get("type") or ""), library)
+        if not match:
+            continue
+        mutations.extend(canonicalize_bus_interface_ports(match["contract"], bus, index)["mutations"])
+    new_text = _apply_mutations(renamed.text, mutations, IP_CORE_FORMAT_VERSION)
+    return MigrationResult(new_text, True, renamed.mutation_count + len(mutations) + 1, from_version, IP_CORE_FORMAT_VERSION)
+
+
+def migrate_vendor_to_targets(text: str) -> Tuple[bool, str, List[str]]:
+    """Rewrite the legacy ``vendor: altera|xilinx|both|none`` field to ``targets: [...]``."""
+    try:
+        doc_data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return False, text, ["parse error — skipped"]
+    if not isinstance(doc_data, dict) or "vendor" not in doc_data or doc_data["vendor"] is None:
+        return False, text, []
+    vendor = str(doc_data["vendor"])
+    targets = {"altera": ["quartus"], "xilinx": ["vivado"], "both": ["vivado", "quartus"]}.get(vendor, [])
+    y = _round_trip_yaml(text)
+    doc = y.load(text)
+    del doc["vendor"]
+    doc["targets"] = _to_ruamel(targets)
+    out = io.StringIO()
+    y.dump(doc, out)
+    note = f"vendor: '{vendor}' → targets: [{', '.join(repr(t) for t in targets)}]"
+    return True, out.getvalue(), [note]
 
 
 def migrate_memory_map_yaml(text: str) -> MigrationResult:
