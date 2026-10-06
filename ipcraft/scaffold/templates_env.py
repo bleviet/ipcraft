@@ -238,14 +238,26 @@ class _JsCodeGenerator(jinja2.compiler.CodeGenerator):
         self.write("))")
 
 
+# JavaScript string/array methods that have a direct Python spelling.
+_JS_METHODS = (
+    (".push(", ".append("),
+    (".endsWith(", ".endswith("),
+    (".startsWith(", ".startswith("),
+    (".toLowerCase()", ".lower()"),
+    (".toUpperCase()", ".upper()"),
+    (".trim()", ".strip()"),
+)
+
+
 def _adapt_source(source: str) -> str:
     """Adapt Nunjucks-only syntax and whitespace rules to Jinja2.
 
-    * ``.push(`` becomes ``.append(``;
+    * common JavaScript string/array methods are mapped to their Python spelling;
     * Nunjucks keeps the newline following a ``{# comment #}`` even with ``trimBlocks``,
       whereas Jinja2 trims it, so the newline is doubled.
     """
-    source = source.replace(".push(", ".append(")
+    for js_name, py_name in _JS_METHODS:
+        source = source.replace(js_name, py_name)
     return re.sub(r"#\}(\r?\n)", r"#}\1\1", source)
 
 
