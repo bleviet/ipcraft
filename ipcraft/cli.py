@@ -10,6 +10,8 @@ Usage:
     ipcraft generate my_core.ip.yml --watch          # re-generate on file change
     ipcraft parse my_core.vhd -o my_core.ip.yml
     ipcraft validate my_core.ip.yml
+    ipcraft verify my_core.ip.yml ./build            # fail if ./build is stale
+    ipcraft migrate my_core.ip.yml --check
     ipcraft list-buses AXI4_LITE --ports
 
 Global flags (work on every subcommand):
@@ -223,6 +225,38 @@ def cmd_new(args):
         err(f"Failed to scaffold IP core: {e}", args, e)
 
 
+def _build_files(args, output_base: Path):
+    """Parse the IP YAML and render every file in memory.
+
+    Returns ``(ip_core, bus_type, generator, {relpath: content})``. Nothing is written.
+    """
+    ip_core = YamlIpCoreParser().parse_file(args.input)
+
+    bus_type = get_bus_type(ip_core)
+    log(f"Detected bus type: {bus_type}", args)
+
+    log("Generating files...", args)
+    gen = IpCoreProjectGenerator(template_dir=getattr(args, "template_dir", None))
+
+    # Compute the relative path from tb/ to the .mm.yml file.
+    # The .mm.yml lives beside the .ip.yml (ip_dir); tb/ lives under output_base.
+    ip_dir = Path(args.input).resolve().parent
+    mm_file = ip_dir / f"{ip_core.vlnv.name.lower()}.mm.yml"
+    tb_dir = output_base.resolve() / "tb"
+    gen.mm_yaml_relpath = str(Path(os.path.relpath(mm_file, tb_dir)).as_posix())
+
+    all_files = gen.generate_all(
+        ip_core,
+        bus_type=bus_type,
+        structured=True,
+        vendor=args.vendor,
+        include_testbench=args.testbench,
+        include_regs=args.regs,
+        dump_context=getattr(args, "dump_context", False),
+    )
+    return ip_core, bus_type, gen, all_files
+
+
 # ---------------------------------------------------------------------------
 # Subcommand: generate  (core logic extracted for reuse by --watch and init)
 # ---------------------------------------------------------------------------
@@ -239,30 +273,7 @@ def _run_generate_core(args, output_base: Path) -> dict:
         print(f"Generating from {args.input}...", end=" ", flush=True)
 
     log("Parsing IP core YAML...", args)
-    ip_core = YamlIpCoreParser().parse_file(args.input)
-
-    bus_type = get_bus_type(ip_core)
-    log(f"Detected bus type: {bus_type}", args)
-
-    log("Generating files...", args)
-    gen = IpCoreProjectGenerator(template_dir=args.template_dir)
-
-    # Compute the relative path from tb/ to the .mm.yml file.
-    # The .mm.yml lives beside the .ip.yml (ip_dir); tb/ lives under output_base.
-    ip_dir = Path(args.input).resolve().parent
-    mm_file = ip_dir / f"{ip_core.vlnv.name.lower()}.mm.yml"
-    tb_dir = output_base.resolve() / "tb"
-    gen.mm_yaml_relpath = str(Path(os.path.relpath(mm_file, tb_dir)).as_posix())
-
-    all_files = gen.generate_all(
-        ip_core,
-        bus_type=bus_type,
-        structured=True,
-        vendor=args.vendor,
-        include_testbench=args.testbench,
-        include_regs=args.regs,
-        dump_context=args.dump_context,
-    )
+    ip_core, bus_type, gen, all_files = _build_files(args, output_base)
 
     # ---- Dry-run: report and return without writing ----
     if getattr(args, "dry_run", False):
@@ -407,6 +418,99 @@ def _watch_loop(args, output_base: Path) -> None:
                     break  # Restart mtime scan after regen.
     except KeyboardInterrupt:
         print("\nStopped watching.")
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: verify
+# ---------------------------------------------------------------------------
+
+def _list_files(root: Path, prefix: str) -> list:
+    base = root / prefix
+    if not base.is_dir():
+        return []
+    return sorted(p.relative_to(root).as_posix() for p in base.rglob("*") if p.is_file())
+
+
+def cmd_verify(args):
+    """Check that a generated directory matches a fresh generation (drift check)."""
+    generated_dir = Path(args.generated_dir)
+    try:
+        ip_core, _bus, _gen, fresh = _build_files(args, generated_dir)
+        unmanaged = _get_unmanaged_files(ip_core)
+
+        stale = set()
+        for rel, content in fresh.items():
+            if Path(rel).name in unmanaged:
+                continue
+            disk = generated_dir / rel
+            try:
+                if disk.read_text() != content:
+                    stale.add(rel)
+            except (OSError, UnicodeDecodeError):
+                stale.add(rel)
+
+        # Orphans: files in a generated top-level dir that a fresh run no longer produces.
+        for top in {r.split("/")[0] for r in fresh if "/" in r}:
+            for rel in _list_files(generated_dir, top):
+                if rel not in fresh and Path(rel).name not in unmanaged:
+                    stale.add(rel)
+    except SystemExit:
+        raise
+    except Exception as e:
+        err(f"Verification failed: {e}", args, e)
+        return
+
+    stale_sorted = sorted(stale)
+    if args.json:
+        print(json.dumps({"success": not stale_sorted, "staleFiles": stale_sorted}))
+    elif stale_sorted:
+        print(f"Stale: {len(stale_sorted)} file(s) differ from a fresh generation:", file=sys.stderr)
+        for f in stale_sorted:
+            print(f"  {f}", file=sys.stderr)
+    else:
+        print(f"Up to date: {generated_dir.resolve()} matches a fresh generation.")
+    if stale_sorted:
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: migrate
+# ---------------------------------------------------------------------------
+
+def cmd_migrate(args):
+    """Convert legacy snake_case keys in .ip.yml / .mm.yml files to camelCase."""
+    from ipcraft.migrate import migrate_ip_core_yaml, migrate_memory_map_yaml
+
+    exit_code = 0
+    results = []
+    for name in args.paths:
+        path = Path(name)
+        try:
+            text = path.read_text()
+            is_mm = name.lower().endswith((".mm.yml", ".mm.yaml"))
+            res = (migrate_memory_map_yaml if is_mm else migrate_ip_core_yaml)(text)
+            if not res.changed:
+                status = "upToDate"
+                print(f"Up to date: {name}") if not args.json else None
+            elif args.check:
+                status = "needsUpgrade"
+                exit_code = 1
+                print(f"Needs upgrade: {name}") if not args.json else None
+            else:
+                path.write_text(res.text)
+                status = "upgraded"
+                if not args.json:
+                    print(f"Converted legacy keys in {name} ({res.mutation_count} change(s))")
+            results.append({"path": name, "status": status, "mutationCount": res.mutation_count})
+        except Exception as e:  # noqa: BLE001 - report per file, keep going
+            exit_code = 1
+            results.append({"path": name, "status": "error", "error": str(e)})
+            if not args.json:
+                print(f"Error: {name}: {e}", file=sys.stderr)
+    if args.json:
+        print(json.dumps({"success": exit_code == 0, "results": results}))
+    if exit_code:
+        sys.exit(exit_code)
 
 
 # ---------------------------------------------------------------------------
@@ -800,6 +904,42 @@ def main():
     )
     _add_common_args(gen_p)
     gen_p.set_defaults(func=cmd_generate)
+
+    # ---- verify ----
+    ver_p = subparsers.add_parser(
+        "verify",
+        help="Check a generated directory against a fresh generation (drift check)",
+        description=(
+            "Regenerates the IP core in memory and diffs it against GENERATED_DIR.\n"
+            "Exits 1 if any file is stale, missing, or orphaned. managed: false files are exempt."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ver_p.add_argument("input", help="IP core YAML file (.ip.yml)")
+    ver_p.add_argument("generated_dir", metavar="GENERATED_DIR", help="Directory holding generated files")
+    ver_p.add_argument("--vendor", default="both", choices=["none", "intel", "xilinx", "both"],
+                       help="Vendor integration files to expect (default: both)")
+    ver_p.add_argument("--no-testbench", dest="testbench", action="store_false", default=True,
+                       help="Do not expect a Cocotb testbench")
+    ver_p.add_argument("--no-regs", dest="regs", action="store_false", default=True,
+                       help="Do not expect a standalone register bank")
+    ver_p.add_argument("--template-dir", "--methodology", dest="template_dir", action="append",
+                       help="Custom Jinja2 template directory (repeatable)")
+    ver_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_common_args(ver_p)
+    ver_p.set_defaults(func=cmd_verify)
+
+    # ---- migrate ----
+    mig_p = subparsers.add_parser(
+        "migrate",
+        help="Convert legacy snake_case keys in .ip.yml / .mm.yml files to camelCase",
+    )
+    mig_p.add_argument("paths", nargs="+", metavar="FILE", help=".ip.yml / .mm.yml files to convert")
+    mig_p.add_argument("--check", action="store_true",
+                       help="Report files needing conversion without writing; exit 1 if any do")
+    mig_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_common_args(mig_p)
+    mig_p.set_defaults(func=cmd_migrate)
 
     # ---- parse ----
     parse_p = subparsers.add_parser(

@@ -1,6 +1,6 @@
 # CLI Reference
 
-IPCraft provides six commands: `init`, `new`, `generate`, `parse`, `list-buses`, and `validate`.
+IPCraft provides eight commands: `init`, `new`, `generate`, `parse`, `list-buses`, `validate`, `verify`, and `migrate`.
 
 ```bash
 ipcraft [--debug] [-v] <command> [options]
@@ -383,3 +383,34 @@ ipcraft validate <input.yml> [options]
 ipcraft validate my_core.ip.yml
 ```
 
+
+---
+
+## `verify` -- Detect Stale Generated Output
+
+Regenerates an IP core in memory and compares it with a generated directory.
+Exits `1` if any file differs, is missing, or is orphaned (present in a generated
+top-level directory such as `rtl/` but no longer produced). Files marked
+`managed: false` are exempt. Use it in CI to catch drift between an edited
+`.ip.yml` and committed output.
+
+```bash
+ipcraft verify <ip_yaml_file> <generated_dir> [--vendor none|intel|xilinx|both]
+               [--no-testbench] [--no-regs] [--template-dir DIR] [--json]
+```
+
+Pass the same `--vendor` / `--no-testbench` / `--no-regs` flags you used for `generate`.
+
+---
+
+## `migrate` -- Convert Legacy Keys
+
+Renames legacy snake_case keys (`address_offset`, `reset_value`, `bit_offset`,
+`memory_maps`, `file_sets`, ...) in `.ip.yml` and `.mm.yml` files to their
+camelCase spelling. Comments and layout are preserved.
+
+```bash
+ipcraft migrate <file>... [--check] [--json]
+```
+
+`--check` reports files that need conversion without writing and exits `1` if any do.

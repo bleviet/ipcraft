@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] — refactor/ipcraft-improvement-plan
 
+### Added
+
+- `ipcraft verify` (drift check of a generated directory) and `ipcraft migrate`
+  (legacy snake_case → camelCase key conversion), matching the ipcraft-vscode CLI.
+
 ### Fixed
 
 - **[TASK-10] BUG-A: Jinja2 `has_wstrb` scoping** (`bus_axil.vhdl.j2`,
