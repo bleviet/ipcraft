@@ -1,0 +1,345 @@
+{
+  "type": "array",
+  "description": "List of memory map definitions (*.mm.yml format)",
+  "items": {
+    "$defs": {
+      "AccessType": {
+        "description": "Register/field access types for YAML parsing.",
+        "enum": [
+          "read-only",
+          "write-only",
+          "read-write",
+          "write-1-to-clear",
+          "read-write-1-to-clear",
+          "write-self-clearing",
+          "read-write-self-clearing"
+        ],
+        "title": "AccessType",
+        "type": "string"
+      },
+      "AddressBlock": {
+        "description": "Contiguous address block within a memory map (Pydantic model).\n\nCan contain registers, memory, or reserved space.",
+        "properties": {
+          "name": {
+            "description": "Block name",
+            "title": "Name",
+            "type": "string"
+          },
+          "baseAddress": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0,
+            "description": "Block starting address",
+            "title": "Baseaddress"
+          },
+          "range": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Block size (bytes or '4K', '1M', etc.)",
+            "title": "Range"
+          },
+          "usage": {
+            "$ref": "#/$defs/BlockUsage",
+            "default": "register",
+            "description": "Block usage type"
+          },
+          "access": {
+            "$ref": "#/$defs/AccessType",
+            "default": "read-write",
+            "description": "Default access"
+          },
+          "description": {
+            "default": "",
+            "description": "Block description",
+            "title": "Description",
+            "type": "string"
+          },
+          "defaultRegWidth": {
+            "default": 32,
+            "description": "Default register width",
+            "title": "Defaultregwidth",
+            "type": "integer"
+          },
+          "registers": {
+            "description": "Registers in block",
+            "items": {
+              "$ref": "#/$defs/RegisterDef"
+            },
+            "title": "Registers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AddressBlock",
+        "type": "object"
+      },
+      "BitFieldDef": {
+        "description": "Bit field definition within a register (Pydantic model for YAML parsing).\n\nRepresents a named range of bits with specific access semantics.",
+        "properties": {
+          "name": {
+            "description": "Bit field name",
+            "title": "Name",
+            "type": "string"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Starting bit position (LSB = 0)",
+            "title": "Offset"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Number of bits",
+            "title": "Width"
+          },
+          "bits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Bit range string e.g. [7:0]",
+            "title": "Bits"
+          },
+          "access": {
+            "$ref": "#/$defs/AccessType",
+            "default": "read-write",
+            "description": "Access type"
+          },
+          "resetValue": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reset/default value",
+            "title": "Resetvalue"
+          },
+          "description": {
+            "default": "",
+            "description": "Field description",
+            "title": "Description",
+            "type": "string"
+          },
+          "enumeratedValues": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Enumeration mapping {value: name}",
+            "title": "Enumeratedvalues"
+          },
+          "monitorChangeOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Field name in the same register to watch for change-of-state. Valid only on write-1-to-clear fields. Generator creates an internal shadow register and comparator — no external pulse port is emitted for this field.",
+            "title": "Monitorchangeof"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BitFieldDef",
+        "type": "object"
+      },
+      "BlockUsage": {
+        "description": "Address block usage type.",
+        "enum": [
+          "register",
+          "memory",
+          "reserved"
+        ],
+        "title": "BlockUsage",
+        "type": "string"
+      },
+      "RegisterDef": {
+        "description": "Register definition within a memory map (Pydantic model for YAML parsing).\n\nRepresents a memory-mapped register with bit fields.",
+        "properties": {
+          "name": {
+            "description": "Register name",
+            "title": "Name",
+            "type": "string"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Offset from address block base",
+            "title": "Offset"
+          },
+          "size": {
+            "default": 32,
+            "description": "Register width in bits",
+            "title": "Size",
+            "type": "integer"
+          },
+          "access": {
+            "$ref": "#/$defs/AccessType",
+            "default": "read-write",
+            "description": "Default access type"
+          },
+          "resetValue": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0,
+            "description": "Reset value for entire register",
+            "title": "Resetvalue"
+          },
+          "description": {
+            "default": "",
+            "description": "Register description",
+            "title": "Description",
+            "type": "string"
+          },
+          "fields": {
+            "description": "Bit fields",
+            "items": {
+              "$ref": "#/$defs/BitFieldDef"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "registers": {
+            "description": "Child registers (for groups)",
+            "items": {
+              "$ref": "#/$defs/RegisterDef"
+            },
+            "title": "Registers",
+            "type": "array"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 1,
+            "description": "Array replication count",
+            "title": "Count"
+          },
+          "stride": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Array replication stride",
+            "title": "Stride"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RegisterDef",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "Complete memory map for an IP core (Pydantic model).\n\nOrganizes registers into address blocks with validation.",
+    "properties": {
+      "name": {
+        "description": "Memory map name",
+        "title": "Name",
+        "type": "string"
+      },
+      "description": {
+        "default": "",
+        "description": "Memory map description",
+        "title": "Description",
+        "type": "string"
+      },
+      "addressBlocks": {
+        "description": "Address blocks",
+        "items": {
+          "$ref": "#/$defs/AddressBlock"
+        },
+        "title": "Addressblocks",
+        "type": "array"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "title": "MemoryMap",
+    "type": "object"
+  }
+}

@@ -1,0 +1,176 @@
+AVALON_MEMORY_MAPPED:
+  busType:
+    vendor: ipcraft
+    library: busif
+    name: avalon_mm
+    version: '1.0'
+    displayName: Avalon-MM
+    description: >
+      Avalon Memory-Mapped (Avalon-MM) is a bus protocol used in Altera (Intel) FPGA designs for connecting masters and slaves in a memory-mapped fashion. It supports read and write operations with optional burst transfers and provides signals for flow control and error reporting.
+  aliases:
+  - kind: short
+    value: AVMM
+  - kind: short
+    value: AVALONMM
+  - kind: short
+    value: AVALONMEMORYMAPPED
+  - kind: short
+    value: AVALON_MEMORY_MAPPED
+  - kind: short
+    value: avalon_mm
+  - kind: short
+    value: avalon-mm
+  - kind: short
+    value: avalon_memory
+  - kind: vlnv
+    vendor: xilinx.com
+    library: interface
+    name: avalon
+    version: '*'
+  - kind: vlnv
+    vendor: xilinx.com
+    library: interface
+    name: avalon-mm
+    version: '*'
+  contract:
+    version: 1
+    interfaceKind: memoryMapped
+    modePolicy:
+      producer: master
+      consumer: slave
+      aliases: {}
+    interfaceProperties: {}
+    constraints:
+    - ruleId: AVALON_MM_DATA_WIDTH
+      code: AVALON_MM_DATA_WIDTH
+      kind: powerOfTwo
+      port: writedata
+      minimum: 8
+      maximum: 1024
+      severity: error
+    - ruleId: AVALON_MM_DATA_EQUAL
+      code: AVALON_MM_DATA_EQUAL
+      kind: portWidthsEqual
+      ports: [writedata, readdata]
+      severity: error
+    - ruleId: AVALON_MM_BYTEENABLE_WIDTH
+      code: AVALON_MM_BYTEENABLE_WIDTH
+      kind: portWidthQuotient
+      port: byteenable
+      dividendPort: writedata
+      divisor: 8
+      severity: error
+  ports:
+  - name: clk
+    width: 1
+    presence: optional
+    role: clock
+    widthPolicy: fixed
+  - name: reset
+    width: 1
+    presence: optional
+    role: reset
+    widthPolicy: fixed
+  - name: address
+    width: 32
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: read
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+    polarity:
+      default: activeHigh
+      roles: { activeHigh: read, activeLow: read_n }
+  - name: write
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+    polarity:
+      default: activeHigh
+      roles: { activeHigh: write, activeLow: write_n }
+  - name: byteenable
+    width: 4
+    direction: out
+    presence: optional
+    role: byteQualifier
+    widthPolicy: derived
+    derivedWidth:
+      operation: divideBy
+      port: writedata
+      divisor: 8
+    polarity:
+      default: activeHigh
+      roles: { activeHigh: byteenable, activeLow: byteenable_n }
+  - name: debugaccess
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: lock
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: writedata
+    width: 32
+    direction: out
+    presence: optional
+    role: data
+    widthPolicy: root
+  - name: readdata
+    width: 32
+    direction: in
+    presence: optional
+    role: data
+    widthPolicy: root
+  - name: readdatavalid
+    width: 1
+    direction: in
+    presence: optional
+    role: control
+    widthPolicy: fixed
+    polarity:
+      default: activeHigh
+      roles: { activeHigh: readdatavalid, activeLow: readdatavalid_n }
+  - name: writeresponsevalid
+    width: 1
+    direction: in
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: waitrequest
+    width: 1
+    direction: in
+    presence: optional
+    role: control
+    widthPolicy: fixed
+    polarity:
+      default: activeHigh
+      roles: { activeHigh: waitrequest, activeLow: waitrequest_n }
+  - name: response
+    width: 2
+    direction: in
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: burstcount
+    width: 8
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: beginbursttransfer
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed

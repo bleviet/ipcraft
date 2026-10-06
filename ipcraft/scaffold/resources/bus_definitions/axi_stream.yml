@@ -1,0 +1,131 @@
+AXI_STREAM:
+  busType:
+    vendor: ipcraft
+    library: busif
+    name: axi_stream
+    version: '1.0'
+    displayName: AXI-Stream
+    description: >
+      AXI-Stream (AXIS) is a subset of the AXI protocol designed for high-speed streaming data transfers. It is typically used for data-intensive applications such as video processing, networking, and signal processing. AXIS supports unidirectional data flow with optional sideband signals for packet management and error reporting.
+  aliases:
+  - kind: short
+    value: AXIS
+  - kind: short
+    value: AXI4S
+  - kind: short
+    value: AXISTREAM
+  - kind: short
+    value: axi_stream
+  - kind: short
+    value: axi-stream
+  contract:
+    version: 1
+    interfaceKind: streaming
+    modePolicy:
+      producer: master
+      consumer: slave
+      aliases:
+        source: master
+        sink: slave
+    interfaceProperties: {}
+    constraints:
+    - ruleId: AXIS_DATA_BYTE_ALIGNED
+      code: AXIS_DATA_BYTE_ALIGNED
+      kind: multipleOf
+      port: TDATA
+      value: 8
+      severity: error
+    - ruleId: AXIS_TKEEP_WIDTH
+      code: AXIS_TKEEP_WIDTH
+      kind: portWidthQuotient
+      port: TKEEP
+      dividendPort: TDATA
+      divisor: 8
+      severity: error
+    - ruleId: AXIS_TSTRB_WIDTH
+      code: AXIS_TSTRB_WIDTH
+      kind: portWidthQuotient
+      port: TSTRB
+      dividendPort: TDATA
+      divisor: 8
+      severity: error
+    - ruleId: AXIS_PREFERRED_DATA_WIDTH
+      code: AXIS_PREFERRED_DATA_WIDTH
+      kind: powerOfTwo
+      port: TDATA
+      minimum: 8
+      maximum: 1024
+      severity: warning
+  ports:
+  - name: ACLK
+    width: 1
+    presence: required
+    role: clock
+    widthPolicy: fixed
+  - name: ARESETn
+    width: 1
+    presence: required
+    role: reset
+    widthPolicy: fixed
+  - name: TDATA
+    width: 32
+    direction: out
+    presence: required
+    role: data
+    widthPolicy: root
+  - name: TVALID
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: TREADY
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: TSTRB
+    width: 4
+    direction: out
+    presence: optional
+    role: byteQualifier
+    widthPolicy: derived
+    derivedWidth:
+      operation: divideBy
+      port: TDATA
+      divisor: 8
+  - name: TKEEP
+    width: 4
+    direction: out
+    presence: optional
+    role: byteQualifier
+    widthPolicy: derived
+    derivedWidth:
+      operation: divideBy
+      port: TDATA
+      divisor: 8
+  - name: TLAST
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: TID
+    width: 8
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: TDEST
+    width: 4
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: TUSER
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root

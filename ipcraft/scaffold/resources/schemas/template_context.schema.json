@@ -1,0 +1,846 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ipcraft.dev/schemas/template_context/1.4.0",
+  "title": "TemplateContext",
+  "description": "Versioned template context passed to all Nunjucks/Jinja2 templates during IP core generation. This is the public API for third-party scaffold packs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "name",
+    "entity_name",
+    "has_memory_mapped_slave",
+    "data_width",
+    "addr_width",
+    "reg_width",
+    "addr_map_size",
+    "registers",
+    "sw_registers",
+    "hw_registers",
+    "w1c_registers",
+    "sc_registers",
+    "cos_registers",
+    "mixed_registers",
+    "generics",
+    "xgui_pages",
+    "display_items",
+    "user_ports",
+    "interrupt_ports",
+    "bus_type",
+    "bus_prefix",
+    "bus_ports",
+    "secondary_bus_ports",
+    "secondary_bus_interfaces",
+    "expanded_bus_interfaces",
+    "elaborate_port_widths",
+    "memory_maps",
+    "clock_port",
+    "reset_port",
+    "reset_active_high",
+    "clocks_with_period",
+    "secondary_clocks",
+    "secondary_resets",
+    "memmap_relpath",
+    "description",
+    "display_name"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "const": "1.4.0",
+      "description": "Semantic version of the template context contract."
+    },
+    "name": { "type": "string" },
+    "entity_name": { "type": "string" },
+    "has_memory_mapped_slave": { "type": "boolean" },
+
+    "data_width": { "type": "integer", "minimum": 1 },
+    "addr_width": { "type": "integer", "minimum": 1 },
+    "reg_width": { "type": "integer", "minimum": 1 },
+    "addr_map_size": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Exclusive upper bound, in bytes, of the mapped register address space (one past the last register's byte offset)."
+    },
+
+    "registers": { "type": "array", "items": { "$ref": "#/definitions/AnnotatedRegister" } },
+    "sw_registers": { "type": "array", "items": { "$ref": "#/definitions/Register" } },
+    "hw_registers": { "type": "array", "items": { "$ref": "#/definitions/Register" } },
+    "w1c_registers": { "type": "array", "items": { "$ref": "#/definitions/W1cRegister" } },
+    "sc_registers": { "type": "array", "items": { "$ref": "#/definitions/Register" } },
+    "cos_registers": { "type": "array", "items": { "$ref": "#/definitions/CosRegister" } },
+    "mixed_registers": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/MixedRegister" },
+      "description": "Registers needing per-field read composition because they mix SW-writable fields with hardware-driven read-only fields (a superset of cos_registers)."
+    },
+
+    "generics": { "type": "array", "items": { "$ref": "#/definitions/Generic" } },
+    "xgui_pages": { "type": "array", "items": { "$ref": "#/definitions/XguiPage" } },
+    "display_items": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/DisplayItem" },
+      "description": "Platform Designer parameter display tree, flattened into add_display_item records (one GROUP per uiPage, one nested GROUP per uiGroup, one PARAMETER per parameter)."
+    },
+
+    "user_ports": { "type": "array", "items": { "$ref": "#/definitions/UserPort" } },
+    "interrupt_ports": { "type": "array", "items": { "$ref": "#/definitions/InterruptPort" } },
+
+    "bus_type": { "type": "string" },
+    "bus_prefix": { "type": "string" },
+    "bus_ports": { "type": "array", "items": { "$ref": "#/definitions/BusPort" } },
+    "secondary_bus_ports": { "type": "array", "items": { "$ref": "#/definitions/BusPort" } },
+    "secondary_bus_interfaces": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/SecondaryBusInterface" }
+    },
+    "expanded_bus_interfaces": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/ExpandedBusInterface" }
+    },
+    "elaborate_port_widths": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/ElaboratePortWidth" }
+    },
+
+    "memory_maps": { "type": "array", "items": { "$ref": "#/definitions/MemoryMap" } },
+
+    "clock_port": { "type": "string" },
+    "reset_port": { "type": "string" },
+    "reset_active_high": { "type": "boolean" },
+    "reset_associated_clock": { "type": ["string", "null"] },
+    "clocks_with_period": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/ClockWithPeriod" }
+    },
+    "secondary_clocks": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/SecondaryClock" }
+    },
+    "secondary_resets": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/SecondaryReset" }
+    },
+
+    "memmap_relpath": { "type": "string" },
+
+    "uses_math_real": {
+      "type": "boolean",
+      "description": "True when any parameterized port width uses a VHDL math_real function (clog2/log2/ceil/floor), so the entity context clause must add `use ieee.math_real.all;`."
+    },
+
+    "endian_swap_ports": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/EndianSwapPort" },
+      "description": "Big-endian data ports (byte reversal) and their byte-qualifier masks (bit reversal), each reflowed through an intermediate `_be` signal at the top level."
+    },
+    "endian_swap_widths": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "Distinct fixed widths of byte-swapped data ports, deduplicated and sorted ascending — one swap_bytes_<width>() function is generated per entry. Bit reversals and parameterized byte swaps are emitted inline and do not appear here."
+    },
+    "has_endian_swap": {
+      "type": "boolean",
+      "description": "True when endian_swap_ports is non-empty; gates package import and the top-level `_be` reflow wiring."
+    },
+    "boundary_transform_ports": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/BoundaryTransformPort" },
+      "description": "Directional ports transformed once at the top-level HDL boundary for endian reflow, polarity inversion, or both."
+    },
+    "has_boundary_transform": {
+      "type": "boolean",
+      "description": "True when boundary_transform_ports is non-empty; gates top-level intermediate signals and transform wiring."
+    },
+
+    "vendor": { "type": "string" },
+    "library": { "type": "string" },
+    "version": { "type": "string" },
+    "author": { "type": "string" },
+    "description": { "type": "string" },
+    "display_name": { "type": "string" }
+  },
+  "definitions": {
+    "Field": {
+      "type": "object",
+      "required": [
+        "name",
+        "offset",
+        "width",
+        "access",
+        "reset_value",
+        "description",
+        "monitorChangeOf"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "width": { "type": "integer" },
+        "access": { "type": "string" },
+        "reset_value": { "type": ["integer", "null"] },
+        "description": { "type": "string" },
+        "monitorChangeOf": { "type": ["string", "null"] }
+      }
+    },
+    "Register": {
+      "type": "object",
+      "required": ["name", "offset", "access", "description", "reset_value", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "access": { "type": "string" },
+        "description": { "type": "string" },
+        "reset_value": { "type": ["integer", "null"] },
+        "fields": { "type": "array", "items": { "$ref": "#/definitions/Field" } }
+      }
+    },
+    "AnnotatedRegister": {
+      "type": "object",
+      "required": [
+        "name",
+        "offset",
+        "access",
+        "description",
+        "reset_value",
+        "fields",
+        "has_cos_fields",
+        "has_mixed_fields"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "access": { "type": "string" },
+        "description": { "type": "string" },
+        "reset_value": { "type": ["integer", "null"] },
+        "fields": { "type": "array", "items": { "$ref": "#/definitions/Field" } },
+        "has_cos_fields": { "type": "boolean" },
+        "has_mixed_fields": {
+          "type": "boolean",
+          "description": "True when this register needs per-field read composition (appears in mixed_registers), whether or not it also uses monitorChangeOf."
+        }
+      }
+    },
+    "W1cField": {
+      "type": "object",
+      "required": [
+        "name",
+        "offset",
+        "width",
+        "access",
+        "reset_value",
+        "description",
+        "monitorChangeOf",
+        "is_cos"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "width": { "type": "integer" },
+        "access": { "type": "string" },
+        "reset_value": { "type": ["integer", "null"] },
+        "description": { "type": "string" },
+        "monitorChangeOf": { "type": ["string", "null"] },
+        "is_cos": { "type": "boolean" }
+      }
+    },
+    "W1cRegister": {
+      "type": "object",
+      "required": ["name", "offset", "access", "description", "reset_value", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "access": { "type": "string" },
+        "description": { "type": "string" },
+        "reset_value": { "type": ["integer", "null"] },
+        "fields": { "type": "array", "items": { "$ref": "#/definitions/W1cField" } }
+      }
+    },
+    "CosField": {
+      "type": "object",
+      "required": [
+        "name",
+        "offset",
+        "width",
+        "access",
+        "reset_value",
+        "description",
+        "monitorChangeOf",
+        "monitored_field"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "width": { "type": "integer" },
+        "access": { "type": "string" },
+        "reset_value": { "type": ["integer", "null"] },
+        "description": { "type": "string" },
+        "monitorChangeOf": { "type": ["string", "null"] },
+        "monitored_field": { "$ref": "#/definitions/Field" }
+      }
+    },
+    "CosRegister": {
+      "type": "object",
+      "required": [
+        "name",
+        "offset",
+        "access",
+        "description",
+        "reset_value",
+        "fields",
+        "cos_fields",
+        "val_fields"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "access": { "type": "string" },
+        "description": { "type": "string" },
+        "reset_value": { "type": ["integer", "null"] },
+        "fields": { "type": "array", "items": { "$ref": "#/definitions/Field" } },
+        "cos_fields": { "type": "array", "items": { "$ref": "#/definitions/CosField" } },
+        "val_fields": { "type": "array", "items": { "$ref": "#/definitions/Field" } }
+      }
+    },
+    "MixedRegister": {
+      "type": "object",
+      "required": [
+        "name",
+        "offset",
+        "access",
+        "description",
+        "reset_value",
+        "fields",
+        "val_fields"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "access": { "type": "string" },
+        "description": { "type": "string" },
+        "reset_value": { "type": ["integer", "null"] },
+        "fields": { "type": "array", "items": { "$ref": "#/definitions/Field" } },
+        "val_fields": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Field" },
+          "description": "Hardware-driven read-only fields sourced from regs_in.<reg>_val at read time instead of internal SW storage."
+        }
+      }
+    },
+    "Generic": {
+      "type": "object",
+      "required": [
+        "name",
+        "display_name",
+        "display_name_tcl",
+        "type",
+        "sv_type",
+        "default_value",
+        "default_value_tcl",
+        "sv_default",
+        "description",
+        "description_tcl",
+        "min",
+        "max",
+        "allowed_values",
+        "allowed_values_tcl",
+        "ui_page",
+        "ui_group"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "display_name": {
+          "type": "string",
+          "description": "Human-readable label from the parameter's displayName, or a title-cased fallback derived from name."
+        },
+        "display_name_tcl": {
+          "type": "string",
+          "description": "display_name escaped for embedding in a Tcl double-quoted string (set_parameter_property ... DISPLAY_NAME \"...\")."
+        },
+        "type": { "type": "string" },
+        "sv_type": { "type": "string" },
+        "default_value": { "type": ["integer", "number", "string", "boolean", "null"] },
+        "default_value_tcl": {
+          "type": ["integer", "number", "string", "boolean", "null"],
+          "description": "default_value rendered safely for the Quartus _hw.tcl add_parameter and DEFAULT_VALUE commands."
+        },
+        "sv_default": { "type": ["integer", "number", "string", "boolean", "null"] },
+        "description": { "type": "string" },
+        "description_tcl": {
+          "type": "string",
+          "description": "description escaped for embedding in a Tcl double-quoted string (set_parameter_property ... DESCRIPTION \"...\")."
+        },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"] },
+        "allowed_values": {
+          "oneOf": [
+            { "type": "array", "items": { "type": ["number", "string"] } },
+            { "type": "null" }
+          ]
+        },
+        "allowed_values_tcl": {
+          "type": ["string", "null"],
+          "description": "allowed_values pre-rendered as a Tcl list literal for ALLOWED_RANGES (string elements quoted and Tcl-escaped), or null when there are no allowed_values."
+        },
+        "ui_page": { "type": "string" },
+        "ui_group": { "type": "string" }
+      }
+    },
+    "DisplayItem": {
+      "type": "object",
+      "required": ["id", "id_tcl", "parent", "parent_tcl", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Globally unique display-item id. Quartus renders a GROUP item's id as its visible label, so this is the authored uiPage/uiGroup text (disambiguated on collision); PARAMETER items use their add_parameter name."
+        },
+        "id_tcl": {
+          "type": "string",
+          "description": "id escaped for embedding in a double-quoted Tcl string."
+        },
+        "parent": {
+          "type": "string",
+          "description": "Parent group id, or an empty string for a root-level item."
+        },
+        "parent_tcl": {
+          "type": "string",
+          "description": "parent escaped for embedding in a double-quoted Tcl string."
+        },
+        "kind": { "type": "string", "enum": ["GROUP", "PARAMETER"] }
+      }
+    },
+    "XguiGroup": {
+      "type": "object",
+      "required": ["name", "tcl_var", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "tcl_var": { "type": "string" },
+        "params": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "tooltip"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "tooltip": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "XguiPage": {
+      "type": "object",
+      "required": ["name", "tcl_var", "groups", "ungrouped_params"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "tcl_var": { "type": "string" },
+        "groups": { "type": "array", "items": { "$ref": "#/definitions/XguiGroup" } },
+        "ungrouped_params": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "tooltip"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "tooltip": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "UserPort": {
+      "type": "object",
+      "required": [
+        "name",
+        "direction",
+        "sv_direction",
+        "type",
+        "sv_type",
+        "width",
+        "width_expr",
+        "is_parameterized",
+        "default_width"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "direction": { "type": "string" },
+        "sv_direction": { "type": "string" },
+        "type": { "type": "string" },
+        "sv_type": { "type": "string" },
+        "width": { "type": "number" },
+        "width_expr": { "type": ["string", "null"] },
+        "is_parameterized": { "type": "boolean" },
+        "default_width": { "type": ["number", "null"] },
+        "tcl_width": { "type": "string" },
+        "endianness": { "type": "string", "enum": ["little", "big"] },
+        "needs_swap": {
+          "type": "boolean",
+          "description": "True when this port is big-endian and byte-swapped via an intermediate `_be` signal at the top level."
+        },
+        "internal_name": {
+          "type": "string",
+          "description": "Collision-free internal signal name used when needs_swap is true."
+        },
+        "swap_kind": {
+          "type": "string",
+          "enum": ["lane", "bit"],
+          "description": "Reflow kind for a big-endian port: 'lane' reverses lane_width-bit lanes, 'bit' reverses individual bits."
+        },
+        "lane_width": {
+          "type": ["number", "string"],
+          "description": "Width of one ordering lane in bits; standalone ports use eight-bit lanes."
+        },
+        "lane_kind": {
+          "type": "string",
+          "const": "byte",
+          "description": "Standalone ports use byte lanes for endianness reflow."
+        }
+      }
+    },
+    "BusPort": {
+      "type": "object",
+      "required": [
+        "logical_name",
+        "interface_role",
+        "physical_suffix",
+        "name",
+        "direction",
+        "sv_direction",
+        "width",
+        "width_expr",
+        "is_parameterized",
+        "default_width",
+        "type",
+        "sv_type",
+        "needs_polarity_inversion"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "logical_name": { "type": "string" },
+        "interface_role": { "type": "string" },
+        "effective_polarity": {
+          "type": "string",
+          "enum": ["activeHigh", "activeLow"]
+        },
+        "physical_suffix": { "type": "string" },
+        "name": { "type": "string" },
+        "direction": { "type": "string" },
+        "sv_direction": { "type": "string" },
+        "width": { "type": "number" },
+        "width_expr": { "type": ["string", "null"] },
+        "is_parameterized": { "type": "boolean" },
+        "default_width": { "type": ["number", "null"] },
+        "type": { "type": "string" },
+        "sv_type": { "type": "string" },
+        "tcl_width": { "type": "string" },
+        "role": { "type": "string" },
+        "endianness": { "type": "string", "enum": ["little", "big"] },
+        "needs_swap": {
+          "type": "boolean",
+          "description": "True when this port is this interface's big-endian data port or its byte qualifier, reflowed via an intermediate `_be` signal at the top level."
+        },
+        "internal_name": {
+          "type": "string",
+          "description": "Collision-free internal signal name used when needs_swap is true."
+        },
+        "swap_kind": {
+          "type": "string",
+          "enum": ["lane", "bit"],
+          "description": "'lane' reverses lane_width-bit data lanes; 'bit' reverses individual qualifier bits."
+        },
+        "lane_width": {
+          "type": ["number", "string"],
+          "description": "Width of one ordering lane in bits. Avalon-ST data uses dataBitsPerSymbol."
+        },
+        "lane_kind": {
+          "type": "string",
+          "enum": ["byte", "symbol"],
+          "description": "Semantic lane kind resolved from the bus contract; byte lanes are eight bits and symbol lanes use the contract's dataBitsPerSymbol."
+        },
+        "needs_polarity_inversion": {
+          "type": "boolean",
+          "description": "True when the selected external interface role is active-low and Task 7 must invert it at the HDL boundary."
+        }
+      }
+    },
+    "EndianSwapPort": {
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "sv_type",
+        "direction",
+        "width",
+        "is_parameterized",
+        "swap_kind",
+        "lane_width",
+        "internal_name"
+      ],
+      "additionalProperties": false,
+      "description": "A big-endian vector port, bus data port, or bus byte-qualifier that needs an intermediate `_be` signal reflowed at the top level.",
+      "properties": {
+        "name": { "type": "string" },
+        "internal_name": {
+          "type": "string",
+          "description": "Collision-free top-level intermediate signal name."
+        },
+        "type": { "type": "string" },
+        "sv_type": { "type": "string" },
+        "direction": { "type": "string" },
+        "width": { "type": "number" },
+        "is_parameterized": { "type": "boolean" },
+        "swap_kind": {
+          "type": "string",
+          "enum": ["lane", "bit"],
+          "description": "'lane' reverses lane_width-bit payload lanes; 'bit' reverses qualifier bits."
+        },
+        "lane_width": {
+          "type": ["number", "string"],
+          "description": "Width of one ordering lane in bits."
+        }
+      }
+    },
+    "BoundaryTransformPort": {
+      "type": "object",
+      "required": [
+        "name",
+        "internal_name",
+        "direction",
+        "type",
+        "sv_type",
+        "width",
+        "width_expr",
+        "is_parameterized",
+        "invert"
+      ],
+      "additionalProperties": false,
+      "description": "One directional port transformed through one collision-free intermediate signal at the top-level HDL boundary.",
+      "properties": {
+        "name": { "type": "string" },
+        "internal_name": { "type": "string" },
+        "direction": { "type": "string", "enum": ["in", "out", "inout"] },
+        "type": { "type": "string" },
+        "sv_type": { "type": "string" },
+        "width": { "type": ["number", "string", "null"] },
+        "width_expr": { "type": ["string", "null"] },
+        "is_parameterized": { "type": "boolean" },
+        "invert": { "type": "boolean" },
+        "swap_kind": { "type": "string", "enum": ["lane", "bit"] },
+        "lane_width": { "type": ["number", "string"] },
+        "lane_kind": { "type": "string", "enum": ["byte", "symbol"] }
+      }
+    },
+    "InterruptPort": {
+      "type": "object",
+      "required": ["name", "direction", "sensitivity"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "direction": { "type": "string" },
+        "sensitivity": { "type": "string" },
+        "associated_bus_interface": { "type": "string" },
+        "associated_clock": { "type": "string" }
+      }
+    },
+    "SecondaryBusInterface": {
+      "type": "object",
+      "required": ["name", "mode", "ports"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "mode": { "type": "string" },
+        "ports": { "type": "array", "items": { "$ref": "#/definitions/BusPort" } }
+      }
+    },
+    "VlnvDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vendor": { "type": "string" },
+        "library": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "RawPortMap": {
+      "type": "object",
+      "required": ["logical", "physical", "direction", "width"],
+      "additionalProperties": false,
+      "properties": {
+        "logical": { "type": "string" },
+        "physical": { "type": "string" },
+        "direction": { "type": "string", "enum": ["in", "out"] },
+        "width": { "type": "integer" }
+      }
+    },
+    "ConduitPort": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "width": { "type": ["number", "string"] },
+        "direction": { "type": "string" },
+        "presence": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "ExpandedBusInterface": {
+      "type": "object",
+      "required": ["mode", "physicalPrefix", "useOptionalPorts", "portWidthOverrides"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "mode": { "type": "string" },
+        "physicalPrefix": { "type": "string" },
+        "useOptionalPorts": { "type": "array", "items": { "type": "string" } },
+        "portWidthOverrides": {
+          "type": "object",
+          "additionalProperties": { "type": ["number", "string"] }
+        },
+        "portNameOverrides": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "portPolarityOverrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["activeHigh", "activeLow"]
+          }
+        },
+        "absentPorts": { "type": "array", "items": { "type": "string" } },
+        "associatedClock": { "type": "string" },
+        "associatedReset": { "type": "string" },
+        "endianness": { "type": "string", "enum": ["little", "big"] },
+        "conduitPorts": { "type": "array", "items": { "$ref": "#/definitions/ConduitPort" } },
+        "busTypeVlnv": { "$ref": "#/definitions/VlnvDef" },
+        "rawPortMaps": { "type": "array", "items": { "$ref": "#/definitions/RawPortMap" } },
+        "ports": { "type": "array", "items": { "$ref": "#/definitions/BusPort" } }
+      }
+    },
+    "ElaboratePortWidth": {
+      "type": "object",
+      "required": [
+        "iface_name",
+        "port_name",
+        "logical_name",
+        "interface_role",
+        "direction",
+        "tcl_width"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "iface_name": { "type": "string" },
+        "port_name": { "type": "string" },
+        "logical_name": { "type": "string" },
+        "interface_role": { "type": "string" },
+        "direction": { "type": "string" },
+        "tcl_width": { "type": "string" }
+      }
+    },
+    "ClockWithPeriod": {
+      "type": "object",
+      "required": ["name", "frequency", "period_ns"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "frequency": { "type": ["string", "null"] },
+        "period_ns": { "type": ["string", "null"] }
+      }
+    },
+    "SecondaryClock": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" }
+      }
+    },
+    "SecondaryReset": {
+      "type": "object",
+      "required": ["name", "active_high"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "active_high": { "type": "boolean" },
+        "associated_clock": { "type": ["string", "null"] }
+      }
+    },
+    "MemoryMapField": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "bits": { "type": "string" },
+        "offset": { "type": "integer" },
+        "bit_offset": { "type": "integer" },
+        "bitOffset": { "type": "integer" },
+        "width": { "type": "integer" },
+        "bit_width": { "type": "integer" },
+        "bitWidth": { "type": "integer" },
+        "access": { "type": "string" },
+        "resetValue": { "type": "integer" },
+        "reset_value": { "type": "integer" },
+        "description": { "type": "string" },
+        "monitorChangeOf": { "type": ["string", "null"] }
+      }
+    },
+    "MemoryMapRegister": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "offset": { "type": "integer" },
+        "address_offset": { "type": "integer" },
+        "addressOffset": { "type": "integer" },
+        "size": { "type": "integer" },
+        "access": { "type": "string" },
+        "resetValue": { "type": "integer" },
+        "reset_value": { "type": "integer" },
+        "description": { "type": "string" },
+        "fields": { "type": "array", "items": { "$ref": "#/definitions/MemoryMapField" } },
+        "count": { "type": "integer" },
+        "stride": { "type": "integer" },
+        "registers": { "type": "array", "items": { "$ref": "#/definitions/MemoryMapRegister" } }
+      }
+    },
+    "MemoryMapAddressBlock": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "base_address": { "type": "integer" },
+        "baseAddress": { "type": "integer" },
+        "range": { "type": ["integer", "number", "string", "null"] },
+        "usage": { "type": "string" },
+        "registers": { "type": "array", "items": { "$ref": "#/definitions/MemoryMapRegister" } }
+      }
+    },
+    "MemoryMap": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "address_blocks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/MemoryMapAddressBlock" }
+        }
+      }
+    }
+  }
+}

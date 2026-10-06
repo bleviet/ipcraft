@@ -1,0 +1,175 @@
+AVALON_STREAMING:
+  busType:
+    vendor: ipcraft
+    library: busif
+    name: avalon_st
+    version: '1.0'
+    displayName: Avalon-ST
+    description: >
+      Avalon Streaming (Avalon-ST) is a bus protocol used in Altera (Intel) FPGA designs for high-speed streaming data transfers. It supports unidirectional data flow with optional sideband signals for packet management and error reporting.
+  aliases:
+  - kind: short
+    value: AVST
+  - kind: short
+    value: AVALONST
+  - kind: short
+    value: AVALONSTREAMING
+  - kind: short
+    value: avalon_st
+  - kind: short
+    value: avalon-st
+  - kind: short
+    value: avalon_stream
+  - kind: vlnv
+    vendor: xilinx.com
+    library: interface
+    name: avalon-st
+    version: '*'
+  - kind: vlnv
+    vendor: altera.com
+    library: interface
+    name: avalon_streaming
+    version: '*'
+  contract:
+    version: 1
+    interfaceKind: streaming
+    modePolicy:
+      producer: source
+      consumer: sink
+      aliases:
+        master: source
+        slave: sink
+    interfaceProperties:
+      dataBitsPerSymbol:
+        type: integer
+        default: 8
+        minimum: 1
+      symbolsPerBeat:
+        type: integer
+        minimum: 1
+        derive:
+          operation: divideBy
+          port: data
+          divisorProperty: dataBitsPerSymbol
+      readyLatency:
+        type: integer
+        default: 0
+        minimum: 0
+      maxChannel:
+        type: integer
+        minimum: 0
+        derive:
+          operation: maxEncodableValue
+          port: channel
+    constraints:
+    - ruleId: AVALON_ST_DATA_LAYOUT
+      code: AVALON_ST_DATA_LAYOUT
+      kind: productEqualsPort
+      port: data
+      properties: [dataBitsPerSymbol, symbolsPerBeat]
+      severity: error
+    - ruleId: AVALON_ST_EMPTY_WIDTH
+      code: AVALON_ST_EMPTY_WIDTH
+      kind: propertyRequiredWhenPortPresent
+      port: empty
+      property: symbolsPerBeat
+      severity: error
+    - ruleId: AVALON_ST_PACKET_PORTS
+      code: AVALON_ST_PACKET_PORTS
+      kind: portPresenceRequires
+      port: startofpacket
+      requires: [endofpacket]
+      severity: error
+    - ruleId: AVALON_ST_PACKET_PORTS_END
+      code: AVALON_ST_PACKET_PORTS_END
+      kind: portPresenceRequires
+      port: endofpacket
+      requires: [startofpacket]
+      severity: error
+    - ruleId: AVALON_ST_EMPTY_REQUIRES_PACKET
+      code: AVALON_ST_EMPTY_REQUIRES_PACKET
+      kind: portPresenceRequires
+      port: empty
+      requires: [endofpacket]
+      severity: error
+    - ruleId: AVALON_ST_READY_LATENCY
+      code: AVALON_ST_READY_LATENCY
+      kind: range
+      property: readyLatency
+      minimum: 0
+      severity: error
+    - ruleId: AVALON_ST_READY_LATENCY_REQUIRED
+      code: AVALON_ST_READY_LATENCY_REQUIRED
+      kind: propertyRequiredWhenPortPresent
+      port: ready
+      property: readyLatency
+      severity: error
+    - ruleId: AVALON_ST_MAX_CHANNEL
+      code: AVALON_ST_MAX_CHANNEL
+      kind: propertyFitsPort
+      port: channel
+      property: maxChannel
+      severity: error
+  ports:
+  - name: clk
+    width: 1
+    presence: required
+    role: clock
+    widthPolicy: fixed
+  - name: reset
+    width: 1
+    presence: required
+    role: reset
+    widthPolicy: fixed
+  - name: data
+    width: 32
+    direction: out
+    presence: required
+    role: data
+    widthPolicy: root
+  - name: valid
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: ready
+    width: 1
+    direction: in
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: startofpacket
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: endofpacket
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: empty
+    width: 2
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: derived
+    overrideConstraintRuleId: AVALON_ST_EMPTY_WIDTH
+    derivedWidth:
+      operation: ceilLog2
+      property: symbolsPerBeat
+  - name: channel
+    width: 8
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: error
+    width: 2
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root

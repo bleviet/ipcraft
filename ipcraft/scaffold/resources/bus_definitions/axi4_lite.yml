@@ -1,0 +1,185 @@
+AXI4_LITE:
+  busType:
+    vendor: ipcraft
+    library: busif
+    name: axi4_lite
+    version: '1.0'
+    displayName: AXI4-Lite
+    description: >
+      AXI4-Lite is a subset of the AXI4 protocol, designed for simple, low-throughput communication between a master and a slave. It is typically used for control and status register access in peripherals. AXI4-Lite supports only single data transfers (no bursts) and has a simplified handshake mechanism compared to the full AXI4 protocol.
+  aliases:
+  - kind: short
+    value: AXI4L
+  - kind: short
+    value: AXI4LITE
+  - kind: short
+    value: AXILITE
+  - kind: short
+    value: AXIL
+  - kind: short
+    value: axi4_lite
+  - kind: short
+    value: axi4-lite
+  - kind: short
+    value: axi4l
+  contract:
+    version: 1
+    interfaceKind: memoryMapped
+    modePolicy:
+      producer: master
+      consumer: slave
+      aliases: {}
+    interfaceProperties: {}
+    constraints:
+    - ruleId: AXI4L_DATA_WIDTH
+      code: AXI4L_DATA_WIDTH
+      kind: allowedValues
+      port: WDATA
+      values: [32, 64]
+      severity: error
+    - ruleId: AXI4L_DATA_EQUAL
+      code: AXI4L_DATA_EQUAL
+      kind: portWidthsEqual
+      ports: [WDATA, RDATA]
+      severity: error
+    - ruleId: AXI4L_WSTRB_WIDTH
+      code: AXI4L_WSTRB_WIDTH
+      kind: portWidthQuotient
+      port: WSTRB
+      dividendPort: WDATA
+      divisor: 8
+      severity: error
+    - ruleId: AXI4L_ADDRESS_EQUAL
+      code: AXI4L_ADDRESS_EQUAL
+      kind: portWidthsEqual
+      ports: [AWADDR, ARADDR]
+      severity: error
+  ports:
+  - name: ACLK
+    width: 1
+    presence: required
+    role: clock
+    widthPolicy: fixed
+  - name: ARESETn
+    width: 1
+    presence: required
+    role: reset
+    widthPolicy: fixed
+  - name: AWADDR
+    width: 32
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: root
+  - name: AWVALID
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: AWREADY
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: AWPROT
+    width: 3
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: WDATA
+    width: 32
+    direction: out
+    presence: required
+    role: data
+    widthPolicy: root
+  - name: WSTRB
+    width: 4
+    direction: out
+    presence: required
+    role: byteQualifier
+    widthPolicy: derived
+    derivedWidth:
+      operation: divideBy
+      port: WDATA
+      divisor: 8
+  - name: WVALID
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: WREADY
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: BRESP
+    width: 2
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: BVALID
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: BREADY
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: ARADDR
+    width: 32
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: root
+  - name: ARVALID
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: ARREADY
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: ARPROT
+    width: 3
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: RDATA
+    width: 32
+    direction: in
+    presence: required
+    role: data
+    widthPolicy: root
+  - name: RRESP
+    width: 2
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: RVALID
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: RREADY
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed

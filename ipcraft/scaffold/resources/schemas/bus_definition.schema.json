@@ -1,0 +1,465 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ipcraft.dev/schemas/bus_definition.schema.json",
+  "title": "BusDefinitionFile",
+  "description": "A mapping of bus-definition keys to legacy port declarations and optional versioned conformance contracts.",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/BusDefinitionEntry"
+  },
+  "$defs": {
+    "NonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Scalar": {
+      "oneOf": [{ "type": "integer" }, { "type": "string" }, { "type": "boolean" }]
+    },
+    "BusType": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vendor": { "$ref": "#/$defs/NonEmptyString" },
+        "library": { "$ref": "#/$defs/NonEmptyString" },
+        "name": { "$ref": "#/$defs/NonEmptyString" },
+        "version": { "$ref": "#/$defs/NonEmptyString" },
+        "displayName": { "$ref": "#/$defs/NonEmptyString" },
+        "description": { "type": "string" }
+      },
+      "required": ["vendor", "library", "name", "version"]
+    },
+    "ShortAlias": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "short" },
+        "value": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["kind", "value"]
+    },
+    "VlnvAlias": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "vlnv" },
+        "vendor": { "$ref": "#/$defs/NonEmptyString" },
+        "library": { "$ref": "#/$defs/NonEmptyString" },
+        "name": { "$ref": "#/$defs/NonEmptyString" },
+        "version": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["kind", "vendor", "library", "name", "version"]
+    },
+    "BusAlias": {
+      "oneOf": [{ "$ref": "#/$defs/ShortAlias" }, { "$ref": "#/$defs/VlnvAlias" }]
+    },
+    "ModePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "producer": { "$ref": "#/$defs/NonEmptyString" },
+        "consumer": { "$ref": "#/$defs/NonEmptyString" },
+        "aliases": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/NonEmptyString" }
+        }
+      },
+      "required": ["producer", "consumer", "aliases"]
+    },
+    "CopyPortOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "copyPort" },
+        "port": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["operation", "port"]
+    },
+    "MultiplyPortOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "multiplyBy" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "multiplier": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["operation", "port", "multiplier"]
+    },
+    "MultiplyPropertyOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "multiplyBy" },
+        "property": { "$ref": "#/$defs/NonEmptyString" },
+        "multiplier": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["operation", "property", "multiplier"]
+    },
+    "DividePortOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "divideBy" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "divisor": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["operation", "port", "divisor"]
+    },
+    "DividePropertyOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "divideBy" },
+        "property": { "$ref": "#/$defs/NonEmptyString" },
+        "divisor": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["operation", "property", "divisor"]
+    },
+    "DividePortByPropertyOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "divideBy" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "divisorProperty": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["operation", "port", "divisorProperty"]
+    },
+    "MultiplyPropertiesOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "multiplyProperties" },
+        "properties": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NonEmptyString" },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": ["operation", "properties"]
+    },
+    "CeilLog2Operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "ceilLog2" },
+        "property": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["operation", "property"]
+    },
+    "BitsForMaximumOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "bitsForMaximum" },
+        "property": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["operation", "property"]
+    },
+    "MaxEncodableValueOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": { "const": "maxEncodableValue" },
+        "port": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["operation", "port"]
+    },
+    "DerivedOperation": {
+      "oneOf": [
+        { "$ref": "#/$defs/CopyPortOperation" },
+        { "$ref": "#/$defs/MultiplyPortOperation" },
+        { "$ref": "#/$defs/MultiplyPropertyOperation" },
+        { "$ref": "#/$defs/DividePortOperation" },
+        { "$ref": "#/$defs/DividePropertyOperation" },
+        { "$ref": "#/$defs/DividePortByPropertyOperation" },
+        { "$ref": "#/$defs/MultiplyPropertiesOperation" },
+        { "$ref": "#/$defs/CeilLog2Operation" },
+        { "$ref": "#/$defs/BitsForMaximumOperation" },
+        { "$ref": "#/$defs/MaxEncodableValueOperation" }
+      ]
+    },
+    "PropertyDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["integer", "boolean", "string"] },
+        "default": { "$ref": "#/$defs/Scalar" },
+        "minimum": { "type": "integer" },
+        "maximum": { "type": "integer" },
+        "allowedValues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Scalar" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "derive": { "$ref": "#/$defs/DerivedOperation" }
+      },
+      "required": ["type"]
+    },
+    "ConstraintRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "range" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "property": { "$ref": "#/$defs/NonEmptyString" },
+        "minimum": { "type": "integer" },
+        "maximum": { "type": "integer" },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "severity"],
+      "allOf": [
+        { "oneOf": [{ "required": ["port"] }, { "required": ["property"] }] },
+        { "anyOf": [{ "required": ["minimum"] }, { "required": ["maximum"] }] }
+      ]
+    },
+    "ConstraintAllowedValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "allowedValues" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "property": { "$ref": "#/$defs/NonEmptyString" },
+        "values": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Scalar" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "values", "severity"],
+      "oneOf": [{ "required": ["port"] }, { "required": ["property"] }]
+    },
+    "ConstraintMultipleOf": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "multipleOf" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "property": { "$ref": "#/$defs/NonEmptyString" },
+        "value": { "type": "integer", "minimum": 1 },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "value", "severity"],
+      "oneOf": [{ "required": ["port"] }, { "required": ["property"] }]
+    },
+    "ConstraintPowerOfTwo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "powerOfTwo" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "property": { "$ref": "#/$defs/NonEmptyString" },
+        "minimum": { "type": "integer" },
+        "maximum": { "type": "integer" },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "severity"],
+      "oneOf": [{ "required": ["port"] }, { "required": ["property"] }]
+    },
+    "ConstraintPortWidthsEqual": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "portWidthsEqual" },
+        "ports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NonEmptyString" },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "ports", "severity"]
+    },
+    "ConstraintPortWidthQuotient": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "portWidthQuotient" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "dividendPort": { "$ref": "#/$defs/NonEmptyString" },
+        "divisor": { "type": "integer", "minimum": 1 },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "port", "dividendPort", "divisor", "severity"]
+    },
+    "ConstraintProductEqualsPort": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "productEqualsPort" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "properties": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NonEmptyString" },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "port", "properties", "severity"]
+    },
+    "ConstraintPortPresenceRequires": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "portPresenceRequires" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "requires": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NonEmptyString" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "port", "requires", "severity"]
+    },
+    "ConstraintPropertyRequiredWhenPortPresent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "propertyRequiredWhenPortPresent" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "property": { "$ref": "#/$defs/NonEmptyString" },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "port", "property", "severity"]
+    },
+    "ConstraintPropertyFitsPort": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": { "$ref": "#/$defs/NonEmptyString" },
+        "code": { "$ref": "#/$defs/NonEmptyString" },
+        "kind": { "const": "propertyFitsPort" },
+        "port": { "$ref": "#/$defs/NonEmptyString" },
+        "property": { "$ref": "#/$defs/NonEmptyString" },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "$ref": "#/$defs/NonEmptyString" }
+      },
+      "required": ["ruleId", "code", "kind", "port", "property", "severity"]
+    },
+    "BusConstraint": {
+      "oneOf": [
+        { "$ref": "#/$defs/ConstraintRange" },
+        { "$ref": "#/$defs/ConstraintAllowedValues" },
+        { "$ref": "#/$defs/ConstraintMultipleOf" },
+        { "$ref": "#/$defs/ConstraintPowerOfTwo" },
+        { "$ref": "#/$defs/ConstraintPortWidthsEqual" },
+        { "$ref": "#/$defs/ConstraintPortWidthQuotient" },
+        { "$ref": "#/$defs/ConstraintProductEqualsPort" },
+        { "$ref": "#/$defs/ConstraintPortPresenceRequires" },
+        { "$ref": "#/$defs/ConstraintPropertyRequiredWhenPortPresent" },
+        { "$ref": "#/$defs/ConstraintPropertyFitsPort" }
+      ]
+    },
+    "BusContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "const": 1 },
+        "interfaceKind": { "enum": ["memoryMapped", "streaming", "conduit"] },
+        "modePolicy": { "$ref": "#/$defs/ModePolicy" },
+        "interfaceProperties": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/PropertyDeclaration" }
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/BusConstraint" }
+        }
+      },
+      "required": ["version", "interfaceKind", "modePolicy", "interfaceProperties", "constraints"]
+    },
+    "PortPolarity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": { "enum": ["activeHigh", "activeLow"] },
+        "roles": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "activeHigh": { "$ref": "#/$defs/NonEmptyString" },
+            "activeLow": { "$ref": "#/$defs/NonEmptyString" }
+          },
+          "required": ["activeHigh", "activeLow"]
+        }
+      },
+      "required": ["default", "roles"]
+    },
+    "BusContractPort": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/NonEmptyString" },
+        "width": {
+          "oneOf": [{ "type": "integer", "minimum": 1 }, { "$ref": "#/$defs/NonEmptyString" }]
+        },
+        "direction": { "enum": ["in", "out"] },
+        "presence": { "enum": ["required", "optional"] },
+        "role": { "$ref": "#/$defs/NonEmptyString" },
+        "polarity": { "$ref": "#/$defs/PortPolarity" },
+        "widthPolicy": { "enum": ["root", "derived", "fixed"] },
+        "derivedWidth": { "$ref": "#/$defs/DerivedOperation" },
+        "overrideConstraintRuleId": {
+          "$ref": "#/$defs/NonEmptyString",
+          "description": "Exact constraint ruleId used when an authored fixed/derived width conflicts with this port's contract width."
+        }
+      },
+      "required": ["name"]
+    },
+    "BusDefinitionEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "busType": { "$ref": "#/$defs/BusType" },
+        "aliases": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/BusAlias" }
+        },
+        "contract": { "$ref": "#/$defs/BusContract" },
+        "source": {
+          "enum": ["vivado", "workspace"],
+          "description": "Artifact provenance assigned by interface scanners. Vivado definitions already exist in the installed catalog; workspace definitions are authored project artifacts."
+        },
+        "ports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/BusContractPort" }
+        }
+      },
+      "required": ["busType", "ports"]
+    }
+  }
+}

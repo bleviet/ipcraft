@@ -1,0 +1,58 @@
+name: "builtin-ipcraft"
+apiVersion: "^1.0"
+description: >
+  Standard layered architecture: package, top-level entity/module, core logic
+  stub, bus wrapper, and register file. Recommended for IP cores with a memory-
+  mapped slave interface (AXI-Lite, AXI4, Avalon-MM).
+fullGeneration: true
+
+files:
+  # ── VHDL package (shared types) ────────────────────────────────────────────
+  # Also generated when a boundary transform is present without a memory-mapped
+  # slave: the top needs a core, and the VHDL core imports this package.
+  - source: "package.vhdl.j2"
+    target: "rtl/{{ name }}_pkg.vhd"
+    condition: "not is_systemverilog and (has_memory_mapped_slave or has_boundary_transform)"
+
+  # ── SV package ─────────────────────────────────────────────────────────────
+  - source: "pkg.sv.j2"
+    target: "rtl/{{ name }}_pkg.sv"
+    condition: "is_systemverilog and (has_memory_mapped_slave or has_boundary_transform)"
+
+  # ── Register file ───────────────────────────────────────────────────────────
+  - source: "register_file.vhdl.j2"
+    target: "rtl/{{ name }}_regs.vhd"
+    condition: "not is_systemverilog and includeRegs and has_memory_mapped_slave"
+
+  - source: "register_file.sv.j2"
+    target: "rtl/{{ name }}_regs.sv"
+    condition: "is_systemverilog and includeRegs and has_memory_mapped_slave"
+
+  # ── Core logic stub (user-owned after first write) ──────────────────────────
+  # An IP with a boundary transform and no memory-mapped slave still needs a core
+  # for the top to wire the canonical internal port view through.
+  - source: "core.vhdl.j2"
+    target: "rtl/{{ name }}_core.vhd"
+    condition: "not is_systemverilog and (has_memory_mapped_slave or has_boundary_transform)"
+
+  - source: "core.sv.j2"
+    target: "rtl/{{ name }}_core.sv"
+    condition: "is_systemverilog and (has_memory_mapped_slave or has_boundary_transform)"
+
+  # ── Bus wrapper ─────────────────────────────────────────────────────────────
+  - source: "bus_{{ bus_type }}.vhdl.j2"
+    target: "rtl/{{ name }}_{{ bus_type }}.vhd"
+    condition: "not is_systemverilog and has_memory_mapped_slave"
+
+  - source: "bus_{{ bus_type }}.sv.j2"
+    target: "rtl/{{ name }}_{{ bus_type }}.sv"
+    condition: "is_systemverilog and has_memory_mapped_slave"
+
+  # ── Top-level entity / module ───────────────────────────────────────────────
+  - source: "top.vhdl.j2"
+    target: "rtl/{{ name }}.vhd"
+    condition: "not is_systemverilog"
+
+  - source: "top.sv.j2"
+    target: "rtl/{{ name }}.sv"
+    condition: "is_systemverilog"

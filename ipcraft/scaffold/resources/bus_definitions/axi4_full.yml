@@ -1,0 +1,297 @@
+AXI4_FULL:
+  busType:
+    vendor: ipcraft
+    library: busif
+    name: axi4_full
+    version: '1.0'
+    displayName: AXI4-Full
+    description: >
+      AXI4-Full is the full-featured version of the AXI4 protocol, designed for high-performance, high-throughput communication between a master and a slave. It supports burst transfers, multiple outstanding transactions, and a wide range of data widths. AXI4-Full is commonly used for connecting high-speed peripherals and memory interfaces in SoC designs.
+  aliases:
+  - kind: short
+    value: AXI4F
+  - kind: short
+    value: AXI4FULL
+  - kind: short
+    value: AXI4
+  - kind: short
+    value: axi4_full
+  - kind: short
+    value: axi4-full
+  - kind: short
+    value: axi4f
+  contract:
+    version: 1
+    interfaceKind: memoryMapped
+    modePolicy:
+      producer: master
+      consumer: slave
+      aliases: {}
+    interfaceProperties: {}
+    constraints:
+    - ruleId: AXI4_DATA_WIDTH
+      code: AXI4_DATA_WIDTH
+      kind: powerOfTwo
+      port: WDATA
+      minimum: 8
+      maximum: 1024
+      severity: error
+    - ruleId: AXI4_DATA_EQUAL
+      code: AXI4_DATA_EQUAL
+      kind: portWidthsEqual
+      ports: [WDATA, RDATA]
+      severity: error
+    - ruleId: AXI4_WSTRB_WIDTH
+      code: AXI4_WSTRB_WIDTH
+      kind: portWidthQuotient
+      port: WSTRB
+      dividendPort: WDATA
+      divisor: 8
+      severity: error
+    - ruleId: AXI4_ID_WIDTHS
+      code: AXI4_ID_WIDTHS
+      kind: portWidthsEqual
+      ports: [AWID, BID, ARID, RID]
+      severity: error
+    - ruleId: AXI4_ADDRESS_EQUAL
+      code: AXI4_ADDRESS_EQUAL
+      kind: portWidthsEqual
+      ports: [AWADDR, ARADDR]
+      severity: error
+    - ruleId: AXI4_BID_REQUIRES_RESPONSE
+      code: AXI4_BID_REQUIRES_RESPONSE
+      kind: portPresenceRequires
+      port: BID
+      requires: [BVALID, BRESP]
+      severity: error
+    - ruleId: AXI4_RID_REQUIRES_RESPONSE
+      code: AXI4_RID_REQUIRES_RESPONSE
+      kind: portPresenceRequires
+      port: RID
+      requires: [RVALID, RRESP]
+      severity: error
+  ports:
+  - name: ACLK
+    width: 1
+    presence: required
+    role: clock
+    widthPolicy: fixed
+  - name: ARESETn
+    width: 1
+    presence: required
+    role: reset
+    widthPolicy: fixed
+  - name: AWID
+    width: 4
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: AWADDR
+    width: 32
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: root
+  - name: AWVALID
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: AWREADY
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: AWPROT
+    width: 3
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: AWLEN
+    width: 8
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: AWSIZE
+    width: 3
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: AWBURST
+    width: 2
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: AWLOCK
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: AWCACHE
+    width: 4
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: WDATA
+    width: 32
+    direction: out
+    presence: required
+    role: data
+    widthPolicy: root
+  - name: WSTRB
+    width: 4
+    direction: out
+    presence: required
+    role: byteQualifier
+    widthPolicy: derived
+    derivedWidth:
+      operation: divideBy
+      port: WDATA
+      divisor: 8
+  - name: WLAST
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: WVALID
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: WREADY
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: BID
+    width: 4
+    direction: in
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: BRESP
+    width: 2
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: BVALID
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: BREADY
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: ARID
+    width: 4
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: ARADDR
+    width: 32
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: root
+  - name: ARVALID
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: ARREADY
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: ARPROT
+    width: 3
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: ARLEN
+    width: 8
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: ARSIZE
+    width: 3
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: ARBURST
+    width: 2
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: ARLOCK
+    width: 1
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: ARCACHE
+    width: 4
+    direction: out
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: RID
+    width: 4
+    direction: in
+    presence: optional
+    role: control
+    widthPolicy: root
+  - name: RDATA
+    width: 32
+    direction: in
+    presence: required
+    role: data
+    widthPolicy: root
+  - name: RRESP
+    width: 2
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: RLAST
+    width: 1
+    direction: in
+    presence: optional
+    role: control
+    widthPolicy: fixed
+  - name: RVALID
+    width: 1
+    direction: in
+    presence: required
+    role: control
+    widthPolicy: fixed
+  - name: RREADY
+    width: 1
+    direction: out
+    presence: required
+    role: control
+    widthPolicy: fixed

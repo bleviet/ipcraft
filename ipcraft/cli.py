@@ -33,6 +33,7 @@ except Exception:
     _VERSION = "dev"
 
 from ipcraft.generator.hdl.ipcore_project_generator import IpCoreProjectGenerator
+from ipcraft.generator.reindent import reindent_generated_sources
 from ipcraft.generator.yaml.ip_yaml_generator import IpYamlGenerator
 from ipcraft.model.bus_library import get_bus_library
 from ipcraft.parser.yaml.ip_yaml_parser import YamlIpCoreParser
@@ -43,6 +44,25 @@ from ipcraft.utils.diagram import generate_ascii_diagram
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
+def _add_indent_args(p: argparse.ArgumentParser) -> None:
+    """Add --indent-style / --indent-size (generate and verify)."""
+    p.add_argument(
+        "--indent-style", choices=["spaces", "tab"],
+        help="Indentation style for generated HDL and synthesis-tool sources (default: templates as-is)",
+    )
+    p.add_argument(
+        "--indent-size", type=_positive_int, metavar="N",
+        help="Spaces per indentation level when --indent-style is 'spaces' (default: 2 once an indent option is given)",
+    )
+
+
+def _positive_int(value: str) -> int:
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError("expected a positive integer")
+    return n
+
 
 def _add_common_args(p: argparse.ArgumentParser) -> None:
     """Add --debug / -v flags that every subcommand shares."""
@@ -253,6 +273,9 @@ def _build_files(args, output_base: Path):
         include_testbench=args.testbench,
         include_regs=args.regs,
         dump_context=getattr(args, "dump_context", False),
+    )
+    all_files = reindent_generated_sources(
+        all_files, getattr(args, "indent_style", None), getattr(args, "indent_size", None)
     )
     return ip_core, bus_type, gen, all_files
 
@@ -902,6 +925,7 @@ def main():
             "Useful when developing or debugging custom --template-dir templates."
         ),
     )
+    _add_indent_args(gen_p)
     _add_common_args(gen_p)
     gen_p.set_defaults(func=cmd_generate)
 
@@ -926,6 +950,7 @@ def main():
     ver_p.add_argument("--template-dir", "--methodology", dest="template_dir", action="append",
                        help="Custom Jinja2 template directory (repeatable)")
     ver_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_indent_args(ver_p)
     _add_common_args(ver_p)
     ver_p.set_defaults(func=cmd_verify)
 
