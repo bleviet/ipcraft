@@ -1,0 +1,37 @@
+apiVersion: '1.1'
+vlnv:
+  vendor: user
+  library: ip
+  name: oldstyle
+  version: 1.0.0
+description: Generated from b.v
+clocks:
+  - name: clk
+    direction: in
+    associatedReset: rst
+resets:
+  - name: rst
+    direction: in
+    polarity: activeHigh
+    associatedClock: clk
+ports:
+  - name: d
+    direction: in
+    width: W
+  - name: q
+    direction: out
+    width: W
+parameters:
+  - name: W
+    value: 8
+    dataType: integer
+  - name: NIBBLE
+    value: 4'd3
+    dataType: integer
+fileSets:
+  - name: RTL_Sources
+    description: RTL source files
+    files:
+      - path: b.v
+        type: verilog
+        managed: false

@@ -1,0 +1,6 @@
+{
+ "warnings": [
+  "Warning: vector parameter detected on parameter 'INIT'. Convert to integer for cross-vendor GUI compatibility."
+ ],
+ "entityName": "fancy"
+}

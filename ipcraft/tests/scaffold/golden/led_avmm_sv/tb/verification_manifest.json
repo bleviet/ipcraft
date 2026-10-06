@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "model": "normalizedMemoryMap",
+    "provenance": "spec"
+  },
+  "bus": {
+    "type": {
+      "value": "avmm",
+      "provenance": "busBinding"
+    },
+    "dataWidth": {
+      "value": 32,
+      "provenance": "busBinding"
+    },
+    "byteEnable": {
+      "value": {
+        "supported": true,
+        "laneCount": 4,
+        "behavior": "perByteWriteMask"
+      },
+      "provenance": "busBinding"
+    }
+  },
+  "policies": {
+    "reservedBitsReadAsZero": {
+      "value": true,
+      "provenance": "generatorPolicy"
+    },
+    "unmappedReadsReturnZero": {
+      "value": true,
+      "provenance": "generatorPolicy"
+    },
+    "writeOneToClearPriority": {
+      "value": "hardwareSet",
+      "provenance": "generatorPolicy"
+    },
+    "selfClearingPriority": {
+      "value": "hardwareClear",
+      "provenance": "generatorPolicy"
+    }
+  },
+  "registers": [
+    {
+      "name": "VERSION",
+      "offset": 0,
+      "width": 32,
+      "resetValue": 256,
+      "readableMask": 65535,
+      "writableMask": 0,
+      "fields": [
+        {
+          "name": "MINOR",
+          "bitOffset": 0,
+          "bitWidth": 8,
+          "mask": 255,
+          "access": "read-only",
+          "resetValue": 0,
+          "readable": true,
+          "writable": false,
+          "writeEffect": "none",
+          "provenance": {
+            "layout": "spec",
+            "access": "spec",
+            "resetValue": "spec",
+            "writeEffect": "generatorPolicy"
+          }
+        },
+        {
+          "name": "MAJOR",
+          "bitOffset": 8,
+          "bitWidth": 8,
+          "mask": 65280,
+          "access": "read-only",
+          "resetValue": 1,
+          "readable": true,
+          "writable": false,
+          "writeEffect": "none",
+          "provenance": {
+            "layout": "spec",
+            "access": "spec",
+            "resetValue": "spec",
+            "writeEffect": "generatorPolicy"
+          }
+        }
+      ],
+      "arrayDimensions": [],
+      "provenance": {
+        "identity": "spec",
+        "layout": "spec",
+        "resetValue": "spec",
+        "masks": "generatorPolicy"
+      }
+    },
+    {
+      "name": "LED_PATTERN",
+      "offset": 4,
+      "width": 32,
+      "resetValue": 0,
+      "readableMask": 255,
+      "writableMask": 255,
+      "fields": [
+        {
+          "name": "PATTERN",
+          "bitOffset": 0,
+          "bitWidth": 8,
+          "mask": 255,
+          "access": "read-write",
+          "resetValue": 0,
+          "readable": true,
+          "writable": true,
+          "writeEffect": "replace",
+          "provenance": {
+            "layout": "spec",
+            "access": "spec",
+            "resetValue": "spec",
+            "writeEffect": "generatorPolicy"
+          }
+        }
+      ],
+      "arrayDimensions": [],
+      "provenance": {
+        "identity": "spec",
+        "layout": "spec",
+        "resetValue": "spec",
+        "masks": "generatorPolicy"
+      }
+    },
+    {
+      "name": "EVENTS",
+      "offset": 8,
+      "width": 32,
+      "resetValue": 0,
+      "readableMask": 1,
+      "writableMask": 2,
+      "fields": [
+        {
+          "name": "HEARTBEAT_ACTIVE",
+          "bitOffset": 0,
+          "bitWidth": 1,
+          "mask": 1,
+          "access": "read-only",
+          "resetValue": 0,
+          "readable": true,
+          "writable": false,
+          "writeEffect": "none",
+          "provenance": {
+            "layout": "spec",
+            "access": "spec",
+            "resetValue": "spec",
+            "writeEffect": "generatorPolicy"
+          }
+        },
+        {
+          "name": "HEARTBEAT_TOGGLED",
+          "bitOffset": 1,
+          "bitWidth": 1,
+          "mask": 2,
+          "access": "write-1-to-clear",
+          "resetValue": 0,
+          "readable": false,
+          "writable": true,
+          "writeEffect": "clearOnOne",
+          "hardwareSoftwarePriority": "hardwareSet",
+          "provenance": {
+            "layout": "spec",
+            "access": "spec",
+            "resetValue": "spec",
+            "writeEffect": "generatorPolicy",
+            "hardwareSoftwarePriority": "generatorPolicy"
+          }
+        }
+      ],
+      "arrayDimensions": [],
+      "provenance": {
+        "identity": "spec",
+        "layout": "spec",
+        "resetValue": "spec",
+        "masks": "generatorPolicy"
+      }
+    }
+  ]
+}

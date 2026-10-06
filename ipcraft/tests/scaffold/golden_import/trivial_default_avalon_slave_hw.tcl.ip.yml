@@ -1,0 +1,148 @@
+apiVersion: '1.1'
+vlnv:
+  vendor: RSF
+  library: ip
+  name: trivial_default_avalon_slave
+  version: '1.0'
+description: A trival avalon slave that can be used as a default slave.
+clocks:
+  - name: clock_clk
+    direction: in
+resets:
+  - name: reset_reset
+    direction: in
+    polarity: activeLow
+  - name: access_event_reset
+    direction: in
+    polarity: activeHigh
+ports:
+  - name: clear_event
+    direction: in
+  - name: access_event_conduit
+    direction: out
+interrupts:
+  - name: access_event_interrupt
+    direction: out
+busInterfaces:
+  - name: slave
+    type: ipcraft:busif:avalon_mm:1.0
+    mode: slave
+    physicalPrefix: slave_
+    associatedClock: clock_clk
+    associatedReset: reset_reset
+    useOptionalPorts:
+      - read
+      - write
+      - byteenable
+      - writedata
+      - readdata
+      - readdatavalid
+      - waitrequest
+    portWidthOverrides:
+      readdata: DATA_BYTES * 8
+      writedata: DATA_BYTES * 8
+      byteenable: DATA_BYTES
+parameters:
+  - name: DATA_BYTES
+    value: 1
+    dataType: integer
+    description: This is the byte width of the slave interface.
+    displayName: Number of Data Bytes
+    allowedValues:
+      - 1
+      - 2
+      - 4
+      - 8
+      - 16
+      - 32
+      - 64
+      - 128
+      - 256
+      - 512
+    uiPage: Slave Data Width
+  - name: READ_DATA_PATTERN
+    value: 0
+    dataType: integer
+    description: This is the value of all bytes returned by this component during a read request.
+    displayName: readdata port pattern(8-bits)
+    min: 0
+    max: 255
+    uiPage: Slave Read Data
+  - name: ENABLE_READ_RESPONSE
+    value: 0
+    dataType: integer
+    description: Enable to use slave response port.  This allows the slave to signal error responses to read requests.
+    displayName: Enable slave response port.
+    uiPage: Slave Response
+  - name: RESPONSE_PATTERN
+    value: 0
+    dataType: integer
+    description: This pattern is always returned on the response port of the slave.
+    displayName: response port pattern(2-bits)
+    allowedValues:
+      - 0:00=OKAY
+      - 1:01=RESERVED
+      - 2:10=SLAVE_ERROR
+      - 3:11=DECODE_ERROR
+    uiPage: Slave Response
+  - name: ENABLE_WRITE_RESPONSE
+    value: 0
+    dataType: integer
+    description: Enable to use slave writeresponsevalid port.  This allows the slave to signal error responses to write requests.
+    displayName: Enable slave writeresponsevalid port.
+    uiPage: Slave Response
+  - name: NEVER_RESPOND
+    value: 0
+    dataType: integer
+    description: Enable to prevent waitrequest from ever asserting.  Disable to allow waitrequest to terminate read and write requests.  A master that accesses this slave when this parameter is enabled will be stalled forever.
+    displayName: waitrequest Never Responds
+    uiPage: Slave waitrequest Behavior
+  - name: ENABLE_CLEAR_EVENT
+    value: 0
+    dataType: integer
+    description: Enable to use clear_event input conduit.
+    displayName: Enable clear_event input
+    uiPage: Clear Event Input
+  - name: CLEAR_EVENT_CONDUIT_ROLE
+    value: clear_event
+    dataType: string
+    description: Enter the role that you want to assign the clear_event conduit input.
+    displayName: Role of clear_event conduit
+    uiPage: Clear Event Input
+  - name: ENABLE_ACCESS_EVENT_CONDUIT
+    value: 0
+    dataType: integer
+    description: Enable to use access_event_conduit output.
+    displayName: Enable access_event_conduit output
+    uiPage: Access Event Output
+  - name: ACCESS_EVENT_CONDUIT_ROLE
+    value: access_event_conduit
+    dataType: string
+    description: Enter the role that you want to assign the access_event_conduit.
+    displayName: Role of access_event_conduit
+    uiPage: Access Event Output
+  - name: ENABLE_ACCESS_EVENT_RESET
+    value: 0
+    dataType: integer
+    description: Enable to use access_event_reset output.
+    displayName: Enable access_event_reset output
+    uiPage: Access Event Output
+  - name: ENABLE_ACCESS_EVENT_INTERRUPT
+    value: 0
+    dataType: integer
+    description: Enable to use access_event_interrupt output.
+    displayName: Enable access_event_interrupt output
+    uiPage: Access Event Output
+fileSets:
+  - name: RTL_Sources
+    description: RTL source files
+    files:
+      - path: trivial_default_avalon_slave.v
+        type: verilog
+        managed: false
+  - name: Simulation_Resources
+    description: Simulation files
+    files:
+      - path: trivial_default_avalon_slave.v
+        type: verilog
+        managed: false

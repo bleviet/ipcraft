@@ -1,0 +1,6 @@
+{
+ "warnings": [
+  "Warning: std_logic_vector generic detected on generic 'INIT'. Convert to integer for cross-vendor GUI compatibility."
+ ],
+ "entityName": "Fancy_Core"
+}

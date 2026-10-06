@@ -731,6 +731,79 @@ def cmd_preview_template(args):
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: import  (VHDL / SystemVerilog / _hw.tcl / component.xml -> .ip.yml)
+# ---------------------------------------------------------------------------
+
+def cmd_import(args):
+    """Import an HDL file, Platform Designer _hw.tcl or Vivado component.xml as .ip.yml (+ .mm.yml)."""
+    from ipcraft.scaffold.importers import import_source
+
+    src = Path(args.input)
+    if not src.exists():
+        err(f"File not found: {src}", args)
+    try:
+        result = import_source(str(src), {
+            "vendor": args.vendor, "library": args.library, "version": args.version,
+            "detectBus": not args.no_detect_bus, "outputDir": args.output,
+        })
+        report = result["report"]
+        if report["hasKnownErrors"]:
+            detail = " ".join(i["message"] for i in report["issues"] if i["severity"] == "error")
+            err(f"Import blocked by bus conformance: {detail}", args)
+        notes = [i["message"] for i in report["issues"]]
+        targets = []
+        for f in result["files"]:
+            out = Path(f["dir"]) / f["name"]
+            existing = out.read_text(encoding="utf-8") if out.exists() else None
+            targets.append((out, f["content"], "created" if existing is None else "unchanged" if existing == f["content"] else "differs"))
+        if args.dry_run:
+            for out, _c, state in targets:
+                print(f"Would write: {out}  ({state})")
+            return
+        written = []
+        for out, content, state in targets:
+            if state == "differs" and not args.force:
+                err(f"Output file already exists and differs: {out}\n  Use --force / -f to overwrite.", args)
+            if state != "unchanged":
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_text(content, encoding="utf-8")
+            written.append((out, state))
+        if args.json:
+            print(json.dumps({"success": True, "kind": result["kind"], "summary": result["summary"],
+                              "files": [{"path": str(o), "status": st} for o, st in written],
+                              "warnings": result["warnings"] + notes}))
+        else:
+            for o, st in written:
+                print(f"✓ {st if st != 'unchanged' else 'already up to date'}: {o}")
+            if result["summary"]:
+                print(f"  {result['summary']}")
+            for w in result["warnings"] + notes:
+                print(f"  Warning: {w}", file=sys.stderr)
+            print("  Review the .ip.yml carefully before generating code.")
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        err(f"Import failed: {e}", args, e)
+
+
+def cmd_instance(args):
+    """Print a component-instantiation snippet for a VHDL / (System)Verilog file."""
+    from ipcraft.scaffold.instance import build_instance
+
+    try:
+        snippet = build_instance(args.input)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        err(f"Copy component instance failed: {e}", args, e)
+        return
+    if args.json:
+        print(json.dumps({"success": True, "snippet": snippet}))
+    else:
+        print(snippet)
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: parse
 # ---------------------------------------------------------------------------
 
@@ -1186,6 +1259,36 @@ def main():
     pv.add_argument("input", help="IP core YAML file (.ip.yml)")
     _add_common_args(pv)
     pv.set_defaults(func=cmd_preview_template, json=False)
+
+    # ---- import ----
+    imp_p = subparsers.add_parser(
+        "import",
+        help="Import VHDL / SystemVerilog / Platform Designer _hw.tcl / Vivado component.xml as .ip.yml",
+        description=(
+            "Pack-engine importer shared with the ipcraft-vscode extension. For a component.xml inside\n"
+            "xilinx/ or altera/ the .ip.yml (and .mm.yml) are written one directory up. Existing files\n"
+            "are never overwritten without --force."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    imp_p.add_argument("input", help="Source file: .vhd/.vhdl, .v/.sv, *_hw.tcl or component.xml")
+    imp_p.add_argument("--output", "--out", "-o", help="Output directory (default: next to the source)")
+    imp_p.add_argument("--vendor", help="VLNV vendor (default: user for HDL; git e-mail domain or 'ipcraft' for _hw.tcl)")
+    imp_p.add_argument("--library", help="VLNV library (default: ip)")
+    imp_p.add_argument("--version", help="VLNV version (default: 1.0.0; HDL sources only)")
+    imp_p.add_argument("--no-detect-bus", action="store_true", help="Do not detect bus interfaces from port names (HDL only)")
+    imp_p.add_argument("--dry-run", action="store_true", help="Show what would be written without writing")
+    imp_p.add_argument("--force", "-f", action="store_true", help="Overwrite existing output files")
+    imp_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_common_args(imp_p)
+    imp_p.set_defaults(func=cmd_import)
+
+    # ---- instance ----
+    inst_p = subparsers.add_parser("instance", help="Print a component-instantiation snippet for a VHDL / SystemVerilog file")
+    inst_p.add_argument("input", help="HDL source file (.vhd, .vhdl, .sv, .v)")
+    inst_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_common_args(inst_p)
+    inst_p.set_defaults(func=cmd_instance)
 
     # ---- parse ----
     parse_p = subparsers.add_parser(

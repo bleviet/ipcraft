@@ -1,0 +1,42 @@
+apiVersion: '1.1'
+vlnv:
+  vendor: user
+  library: ip
+  name: avmm_thing
+  version: 1.0.0
+description: Generated from t2.vhd
+clocks:
+  - name: clock
+    direction: in
+    associatedReset: reset
+resets:
+  - name: reset
+    direction: in
+    polarity: activeHigh
+    associatedClock: clock
+ports:
+  - name: led
+    direction: out
+    width: 8
+busInterfaces:
+  - name: avs
+    type: ipcraft:busif:avalon_mm:1.0
+    mode: slave
+    physicalPrefix: avs_
+    associatedClock: clock
+    associatedReset: reset
+    portPolarityOverrides:
+      read: activeLow
+      write: activeLow
+      waitrequest: activeLow
+    useOptionalPorts:
+      - byteenable
+      - readdatavalid
+      - waitrequest
+fileSets:
+  - name: RTL_Sources
+    description: RTL source files
+    files:
+      - path: t2.vhd
+        type: vhdl
+        managed: false

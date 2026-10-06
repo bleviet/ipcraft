@@ -1,0 +1,99 @@
+apiVersion: '1.1'
+vlnv:
+  vendor: digilentinc.com
+  library: ip
+  name: PWM
+  version: '1.0'
+description: Width of S_AXI data bus
+clocks:
+  - name: pwm_axi_aclk
+    direction: in
+resets:
+  - name: pwm_axi_aresetn
+    direction: in
+    polarity: activeLow
+busInterfaces:
+  - name: PWM_AXI
+    type: ipcraft:busif:axi4_lite:1.0
+    mode: slave
+    physicalPrefix: pwm_axi_
+    associatedClock: pwm_axi_aclk
+    associatedReset: pwm_axi_aresetn
+    memoryMapRef: PWM_AXI
+    portWidthOverrides:
+      AWADDR: 4
+      ARADDR: 4
+memoryMaps:
+  import: PWM.mm.yml
+ports:
+  - name: pwm
+    direction: out
+    width: 1
+  - name: interrupt
+    direction: out
+    width: 1
+parameters:
+  - name: C_PWM_AXI_DATA_WIDTH
+    value: 32
+    dataType: integer
+    allowedValues:
+      - '32'
+  - name: C_PWM_AXI_ADDR_WIDTH
+    value: 4
+    dataType: integer
+  - name: C_PWM_AXI_BASEADDR
+    value: 0
+    dataType: integer
+  - name: C_PWM_AXI_HIGHADDR
+    value: 0
+    dataType: integer
+fileSets:
+  - name: RTL_Sources
+    files:
+      - path: hdl/PWM_v1_0_PWM_AXI.v
+        type: verilog
+        managed: false
+      - path: hdl/PWM_v1_0.v
+        type: verilog
+        managed: false
+    description: RTL Sources
+  - name: Simulation_Resources
+    files:
+      - path: hdl/PWM_v1_0_PWM_AXI.v
+        type: verilog
+        managed: false
+      - path: hdl/PWM_v1_0.v
+        type: verilog
+        managed: false
+    description: Simulation Files
+  - name: xilinx_softwaredriver_view_fileset
+    files:
+      - path: drivers/PWM_v1_0/data/PWM.mdd
+        type: unknown
+        managed: false
+      - path: drivers/PWM_v1_0/data/PWM.tcl
+        type: tcl
+        managed: false
+      - path: drivers/PWM_v1_0/src/Makefile
+        type: unknown
+        managed: false
+      - path: drivers/PWM_v1_0/src/PWM.h
+        type: cSource
+        managed: false
+      - path: drivers/PWM_v1_0/src/PWM.c
+        type: cSource
+        managed: false
+      - path: drivers/PWM_v1_0/src/PWM_selftest.c
+        type: cSource
+        managed: false
+  - name: Integration
+    files:
+      - path: xgui/PWM_v1_0.tcl
+        type: tcl
+        managed: false
+    description: Integration Files
+  - name: bd_tcl_view_fileset
+    files:
+      - path: bd/bd.tcl
+        type: tcl
+        managed: false

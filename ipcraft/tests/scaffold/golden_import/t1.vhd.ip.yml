@@ -1,0 +1,84 @@
+apiVersion: '1.1'
+vlnv:
+  vendor: user
+  library: ip
+  name: Fancy_Core
+  version: 1.0.0
+description: Generated from t1.vhd
+clocks:
+  - name: clk
+    direction: in
+    associatedReset: rst_n
+resets:
+  - name: rst_n
+    direction: in
+    polarity: activeLow
+    associatedClock: clk
+ports:
+  - name: i_enable
+    direction: in
+    logicalName: ENABLE
+  - name: o_data
+    direction: out
+    logicalName: DATA
+    width: DATA_W
+  - name: io_bidir
+    direction: inout
+    logicalName: BIDIR
+    width: 8
+  - name: cnt
+    direction: out
+    width: clog2(DEPTH)
+  - name: narrow
+    direction: in
+    width: 4
+  - name: wide
+    direction: out
+    width: DEPTH*2
+  - name: odd
+    direction: out
+    width: WIDTH+1
+busInterfaces:
+  - name: s_axis
+    type: ipcraft:busif:axi_stream:1.0
+    mode: slave
+    physicalPrefix: s_axis_
+    associatedClock: clk
+    associatedReset: rst_n
+    useOptionalPorts:
+      - TLAST
+  - name: m_axis
+    type: ipcraft:busif:axi_stream:1.0
+    mode: master
+    physicalPrefix: m_axis_
+    associatedClock: clk
+    associatedReset: rst_n
+parameters:
+  - name: DATA_W
+    value: 32
+    dataType: integer
+  - name: NAME
+    value: My "core"
+    dataType: string
+  - name: EN
+    value: 'true'
+    dataType: boolean
+  - name: INIT
+    value: x"AB"
+    dataType: integer
+  - name: FLAG
+    value: 1
+    dataType: integer
+  - name: DEPTH
+    value: 16
+    dataType: integer
+  - name: WIDTH
+    value: 16
+    dataType: integer
+fileSets:
+  - name: RTL_Sources
+    description: RTL source files
+    files:
+      - path: t1.vhd
+        type: vhdl
+        managed: false

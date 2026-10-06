@@ -1,0 +1,6 @@
+- name: PWM_AXI
+  addressBlocks:
+    - name: PWM_AXI_reg
+      baseAddress: 0
+      range: 4096
+      registers: []

@@ -1,0 +1,67 @@
+apiVersion: '1.1'
+vlnv:
+  vendor: user
+  library: ip
+  name: AXI_S
+  version: 1.0.0
+description: Generated from t5.vhd
+clocks:
+  - name: S_AXI_ACLK
+    direction: in
+    associatedReset: S_AXI_ARESETN
+resets:
+  - name: S_AXI_ARESETN
+    direction: in
+    polarity: activeLow
+    associatedClock: S_AXI_ACLK
+ports:
+  - name: GPIO
+    direction: out
+    width: 4
+busInterfaces:
+  - name: s_axi
+    type: ipcraft:busif:axi4_lite:1.0
+    mode: slave
+    physicalPrefix: S_AXI_
+    associatedClock: S_AXI_ACLK
+    associatedReset: S_AXI_ARESETN
+    portWidthOverrides:
+      AWADDR: C_S_AXI_ADDR_WIDTH
+      WDATA: C_S_AXI_DATA_WIDTH
+      WSTRB: C_S_AXI_DATA_WIDTH/8
+      ARADDR: C_S_AXI_ADDR_WIDTH
+      RDATA: C_S_AXI_DATA_WIDTH
+    portNameOverrides:
+      AWADDR: AWADDR
+      AWPROT: AWPROT
+      AWVALID: AWVALID
+      AWREADY: AWREADY
+      WDATA: WDATA
+      WSTRB: WSTRB
+      WVALID: WVALID
+      WREADY: WREADY
+      BRESP: BRESP
+      BVALID: BVALID
+      BREADY: BREADY
+      ARADDR: ARADDR
+      ARPROT: ARPROT
+      ARVALID: ARVALID
+      ARREADY: ARREADY
+      RDATA: RDATA
+      RRESP: RRESP
+      RVALID: RVALID
+      RREADY: RREADY
+parameters:
+  - name: C_S_AXI_DATA_WIDTH
+    value: 32
+    dataType: integer
+  - name: C_S_AXI_ADDR_WIDTH
+    value: 4
+    dataType: integer
+fileSets:
+  - name: RTL_Sources
+    description: RTL source files
+    files:
+      - path: t5.vhd
+        type: vhdl
+        managed: false

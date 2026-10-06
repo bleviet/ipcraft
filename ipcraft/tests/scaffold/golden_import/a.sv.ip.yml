@@ -1,0 +1,70 @@
+apiVersion: '1.1'
+vlnv:
+  vendor: user
+  library: ip
+  name: fancy
+  version: 1.0.0
+description: Generated from a.sv
+clocks:
+  - name: clk
+    direction: in
+    associatedReset: rst_n
+resets:
+  - name: rst_n
+    direction: in
+    polarity: activeLow
+    associatedClock: clk
+ports:
+  - name: i_en
+    direction: in
+    logicalName: EN
+  - name: o_data
+    direction: out
+    logicalName: DATA
+    width: DATA_W
+  - name: cnt
+    direction: out
+    width: clog2(DEPTH)
+  - name: io_pad
+    direction: inout
+    logicalName: PAD
+    width: 8
+  - name: narrow
+    direction: in
+    width: 4
+  - name: wide
+    direction: out
+    width: DATA_W*2
+busInterfaces:
+  - name: s_axis
+    type: ipcraft:busif:axi_stream:1.0
+    mode: slave
+    physicalPrefix: s_axis_
+    associatedClock: clk
+    associatedReset: rst_n
+  - name: m_axis
+    type: ipcraft:busif:axi_stream:1.0
+    mode: master
+    physicalPrefix: m_axis_
+    associatedClock: clk
+    associatedReset: rst_n
+parameters:
+  - name: DATA_W
+    value: 32
+    dataType: integer
+  - name: NAME
+    value: hello "x"
+    dataType: integer
+  - name: INIT
+    value: 8'hAB
+    dataType: integer
+  - name: DEPTH
+    value: 16
+    dataType: integer
+fileSets:
+  - name: RTL_Sources
+    description: RTL source files
+    files:
+      - path: a.sv
+        type: systemverilog
+        managed: false
