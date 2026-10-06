@@ -74,3 +74,32 @@ busInterfaces:
     text = p.read_text()
     assert "apiVersion: '1.1'" in text and "portPolarityOverrides" in text
     assert run("migrate", str(p), "--check").returncode == 0
+
+
+def test_busdef_import_matches_reference(tmp_path):
+    r = run("busdef", "import", str(FIXTURES / "busdef"), "-o", str(tmp_path))
+    assert r.returncode == 0, r.stderr
+    from .conftest import GOLDEN_IMPORT
+
+    assert (tmp_path / "user_busif_xcvr_1_0.yml").read_text() == (GOLDEN_IMPORT / "user_busif_xcvr_1_0.yml").read_text()
+    assert run("busdef", "import", str(FIXTURES / "busdef"), "-o", str(tmp_path)).returncode == 1  # no silent overwrite
+
+
+def test_validate_contracts_reports_protocol_errors(tmp_path):
+    p = tmp_path / "bad.ip.yml"
+    p.write_text("""vlnv: {vendor: a, library: l, name: c, version: 1.0.0}
+clocks: [{name: clk, direction: in}]
+busInterfaces:
+- name: S
+  type: AXI4L
+  mode: slave
+  physicalPrefix: s_axi_
+  portWidthOverrides: {WDATA: 24}
+""")
+    r = run("validate", str(p), "--contracts")
+    assert r.returncode == 1 and "AXI4L_DATA_WIDTH" in r.stdout
+
+
+def test_instance_command():
+    r = run("instance", str(FIXTURES / "import" / "t2.vhd"))
+    assert r.returncode == 0 and r.stdout.startswith("u_avmm_thing : entity work.avmm_thing")

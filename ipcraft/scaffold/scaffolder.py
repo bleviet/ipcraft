@@ -131,7 +131,7 @@ class IpCoreScaffolder:
         input_path = os.path.abspath(input_path)
         output_dir = os.path.abspath(output_dir)
         ip_core = load_ip_core_data(input_path, options.get("sourceText"))
-        library = load_bus_library(input_path, ip_core, self.bus_library_dirs)
+        library = load_bus_library(input_path, ip_core, list(options.get("busLibraryDirs") or []) + self.bus_library_dirs)
         conformance = check_bus_conformance(ip_core, library)
         if blocks_generation(conformance):
             return {"success": False, "error": "Generation blocked by bus interface conformance issues.",

@@ -1,0 +1,21 @@
+USER_BUSIF_XCVR_1_0:
+  busType:
+    vendor: user
+    library: busif
+    name: xcvr
+    version: '1.0'
+    description: Xcvr interface
+  source: workspace
+  ports:
+    - name: tx_data
+      direction: out
+      presence: required
+    - name: tx_k
+      direction: out
+      presence: required
+    - name: rx_data
+      direction: out
+      presence: required
+    - name: rx_k
+      direction: out
+      presence: required

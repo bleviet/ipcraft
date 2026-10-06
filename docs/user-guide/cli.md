@@ -438,6 +438,8 @@ byte-identical to the extension's. Without these options the classic Python gene
 | `--indent-style spaces\|tab`, `--indent-size N` | Indentation of generated HDL / TCL / XDC / SDC (also works with the classic generator) |
 | `--framework cocotb\|vunit`, `--engine-sim ghdl\|icarus\|verilator\|questa` | Testbench framework / simulator (the `simulation:` block of the `.ip.yml` wins) |
 | `--docs` | Also write the Markdown datasheet `docs/<name>_datasheet.md` |
+| `--bus-library DIR` | Extra directory of bus-definition YAML files (repeatable; the extension's `ipcraft.busLibraryPaths`). The Vivado interface cache (`ipcraft busdef scan-vivado`) is picked up automatically |
+| `--pack-dir DIR` | Extra directory searched for scaffold packs by name (repeatable) |
 | `--out DIR` | Output directory (alias of `--output`/`-o`) |
 | `--no-testbench`, `--dry-run`, `--json` | As for the classic generator |
 
@@ -496,3 +498,18 @@ ipcraft instance rtl/fifo.sv      # fifo #(.DEPTH (DEPTH)) u_fifo (...);
 contracts, e.g. Avalon-MM `read_n` becomes `read` + `portPolarityOverrides`) and converts legacy snake_case keys in
 `.ip.yml` / `.mm.yml` files, preserving comments and hex literals. `--check` only reports (exit 1 if anything would
 change); `--vendor-targets` also rewrites the legacy `vendor:` field to `targets:`.
+
+## `busdef` -- IP-XACT bus definitions to YAML
+
+```bash
+ipcraft busdef import path/to/busdef_dir -o my_buses/      # busDefinition + abstractionDefinition XML pairs -> one .yml each
+ipcraft busdef scan-vivado /opt/Xilinx/Vivado/2024.2        # cache Vivado's interface catalog for generate/verify/import
+```
+
+Use the output directory with `--bus-library`, or `useBusLibrary:` in an `.ip.yml`.
+
+## `validate --contracts`
+
+`ipcraft validate core.ip.yml --contracts` checks the file against the JSON schema and the declarative bus contracts
+(port widths, derived widths, mode, polarity overrides, ...) exactly as the extension's editor does, and exits `1`
+on any error. Without `--contracts` the classic Python validators run.

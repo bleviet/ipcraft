@@ -37,6 +37,10 @@ def build_generate_options(args: Any) -> Dict[str, Any]:
         "includeQuartusProject": include_quartus,
         "includeVivadoProject": include_vivado,
     }
+    if getattr(args, "bus_library", None):
+        opts["busLibraryDirs"] = list(args.bus_library)
+    if getattr(args, "pack_dir", None):
+        opts["workspacePackDirs"] = list(args.pack_dir)
     if getattr(args, "docs", False):
         opts["includeDocs"] = True
     if getattr(args, "framework", None):

@@ -74,6 +74,10 @@ def _add_scaffold_args(p: argparse.ArgumentParser) -> None:
                         "in the .ip.yml. Built-ins: builtin-minimal (default), builtin-ipcraft, example-*")
     g.add_argument("--quartus-device", metavar="PART", help="Quartus device part (default: 5CSEBA6U23I7)")
     g.add_argument("--vivado-part", metavar="PART", help="Vivado part (default: xc7z020clg484-1)")
+    g.add_argument("--bus-library", action="append", metavar="DIR",
+                   help="Extra directory of bus-definition YAML files (repeatable; like ipcraft.busLibraryPaths)")
+    g.add_argument("--pack-dir", action="append", metavar="DIR",
+                   help="Extra directory searched for scaffold packs by name (repeatable)")
     g.add_argument("--docs", action="store_true", help="Also generate the Markdown IP datasheet (docs/<name>_datasheet.md)")
     g.add_argument("--framework", choices=["cocotb", "vunit"], help="Testbench framework (default: cocotb)")
     g.add_argument("--engine-sim", dest="engine_sim", choices=["ghdl", "icarus", "verilator", "questa"],
@@ -82,7 +86,8 @@ def _add_scaffold_args(p: argparse.ArgumentParser) -> None:
 
 def _uses_scaffold_engine(args) -> bool:
     return any(getattr(args, name, None) for name in
-               ("target", "lang", "pack", "quartus_device", "vivado_part", "framework", "engine_sim", "docs"))
+               ("target", "lang", "pack", "quartus_device", "vivado_part", "framework", "engine_sim", "docs",
+                "bus_library", "pack_dir"))
 
 
 def _positive_int(value: str) -> int:
@@ -181,10 +186,44 @@ def _print_file_tree(written: dict, output_base: Path) -> None:
 # Subcommand: validate
 # ---------------------------------------------------------------------------
 
+def _validate_contracts(args) -> None:
+    """Schema + bus-contract validation, as performed by the ipcraft-vscode extension."""
+    from ipcraft.scaffold.loader import SchemaValidationError, check_bus_conformance, load_bus_library, load_ip_core_data
+
+    try:
+        issues = []
+        try:
+            ip_core = load_ip_core_data(args.input)
+        except SchemaValidationError as exc:
+            issues.extend(exc.issues)
+            ip_core = None
+        if ip_core is not None:
+            library = load_bus_library(args.input, ip_core, getattr(args, "bus_library", None))
+            issues.extend(check_bus_conformance(ip_core, library)["issues"])
+        errors = [i for i in issues if i["severity"] == "error"]
+        if args.json:
+            print(json.dumps({"success": True, "valid": not errors, "issues": issues}))
+        elif not issues:
+            print(f"✓ {args.input} is valid")
+        else:
+            print(f"{'✗' if errors else '!'} {args.input}: {len(errors)} error(s), {len(issues) - len(errors)} warning(s)")
+            for i in issues:
+                where = ".".join(str(p) for p in i["path"])
+                print(f"  - [{i['severity']}] {i['code']}{' at ' + where if where else ''}: {i['message']}")
+        if errors:
+            sys.exit(1)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        err(f"Validation failed: {e}", args, e)
+
+
 def cmd_validate(args):
     """Validate IP core YAML."""
     from ipcraft.model.validators import IpCoreValidator
 
+    if getattr(args, "contracts", False):
+        return _validate_contracts(args)
     try:
         if getattr(args, "verbose", False):
             print(f"Validating {args.input}...")
@@ -745,6 +784,7 @@ def cmd_import(args):
         result = import_source(str(src), {
             "vendor": args.vendor, "library": args.library, "version": args.version,
             "detectBus": not args.no_detect_bus, "outputDir": args.output,
+            "busLibraryDirs": args.bus_library,
         })
         report = result["report"]
         if report["hasKnownErrors"]:
@@ -1130,6 +1170,9 @@ def main():
     # ---- validate ----
     val_p = subparsers.add_parser("validate", help="Validate IP core YAML")
     val_p.add_argument("input", help="IP core YAML file to validate")
+    val_p.add_argument("--contracts", action="store_true",
+                       help="Validate against the JSON schema and the declarative bus contracts (as the ipcraft-vscode extension does)")
+    val_p.add_argument("--bus-library", action="append", metavar="DIR", help="Extra bus-definition directory with --contracts (repeatable)")
     val_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     _add_common_args(val_p)
     val_p.set_defaults(func=cmd_validate)
@@ -1321,6 +1364,7 @@ def main():
     imp_p.add_argument("--library", help="VLNV library (default: ip)")
     imp_p.add_argument("--version", help="VLNV version (default: 1.0.0; HDL sources only)")
     imp_p.add_argument("--no-detect-bus", action="store_true", help="Do not detect bus interfaces from port names (HDL only)")
+    imp_p.add_argument("--bus-library", action="append", metavar="DIR", help="Extra bus-definition directory (repeatable)")
     imp_p.add_argument("--dry-run", action="store_true", help="Show what would be written without writing")
     imp_p.add_argument("--force", "-f", action="store_true", help="Overwrite existing output files")
     imp_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")

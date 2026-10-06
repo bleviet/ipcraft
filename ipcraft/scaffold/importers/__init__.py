@@ -96,7 +96,7 @@ def import_source(source_path: str, options: Optional[dict] = None) -> Dict[str,
     if kind is None:
         raise ValueError(f"Unsupported source file '{source_path}': expected .vhd/.vhdl, .v/.sv, *_hw.tcl or component.xml")
     src_dir = os.path.dirname(os.path.abspath(source_path))
-    library = load_bus_library(source_path, {})
+    library = load_bus_library(source_path, {}, options.get("busLibraryDirs"))
     vendor, lib_name, version = options.get("vendor"), options.get("library"), options.get("version")
     warnings: List[str] = []
     incomplete: Optional[List[str]] = None
