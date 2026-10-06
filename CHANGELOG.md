@@ -10,8 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- `ipcraft verify` (drift check of a generated directory) and `ipcraft migrate`
-  (legacy snake_case → camelCase key conversion), matching the ipcraft-vscode CLI.
+- **Companion to the ipcraft-vscode CLI.** New pack-driven scaffold engine (`ipcraft.scaffold`) that reproduces the
+  extension's generation byte for byte: declarative bus contracts, scaffold packs, VHDL **and SystemVerilog** RTL,
+  cocotb/VUnit testbenches, Quartus and Vivado packaging and projects, indentation control.
+  `ipcraft generate/verify` select it with `--lang`, `--target`, `--pack`, `--quartus-device`, `--vivado-part`,
+  `--indent-style/--indent-size`, `--framework`, `--engine-sim`, `--docs`.
+- `ipcraft verify` (drift check of a generated directory) and `ipcraft migrate` (`apiVersion` 1.0 → 1.1 upgrade,
+  legacy snake_case → camelCase key conversion, `vendor:` → `targets:`).
+- `ipcraft import` (VHDL, SystemVerilog, Platform Designer `_hw.tcl`, Vivado `component.xml` → `.ip.yml`/`.mm.yml`),
+  `ipcraft instance`, `ipcraft pack list|export`, `ipcraft preview-template`.
+- New dependencies: `jsonschema`, `ruamel.yaml`.
 
 ### Fixed
 

@@ -1,6 +1,11 @@
 # CLI Reference
 
-IPCraft provides eight commands: `init`, `new`, `generate`, `parse`, `list-buses`, `validate`, `verify`, and `migrate`.
+IPCraft provides these commands: `init`, `new`, `generate`, `parse`, `list-buses`, `validate`, `verify`, `migrate`,
+`import`, `instance`, `pack`, and `preview-template`.
+
+`generate`, `verify`, `migrate`, `import`, `instance`, `pack` and `preview-template` share their behaviour, flags
+and output with the `ipcraft` CLI of the [ipcraft-vscode](https://github.com/bleviet/ipcraft-vscode) extension, so a
+project can be driven from VS Code and from Python/CI interchangeably.
 
 ```bash
 ipcraft [--debug] [-v] <command> [options]
@@ -414,3 +419,80 @@ ipcraft migrate <file>... [--check] [--json]
 ```
 
 `--check` reports files that need conversion without writing and exits `1` if any do.
+
+---
+
+## Scaffold engine (`generate` / `verify` options)
+
+Giving `generate` or `verify` any of the options below selects the **pack-driven scaffold engine** — the same
+engine, templates and file layout (`rtl/`, `tb/`, `altera/`, `xilinx/`) as the ipcraft-vscode extension. Output is
+byte-identical to the extension's. Without these options the classic Python generator is used.
+
+| Option | Description |
+|--------|-------------|
+| `--lang vhdl\|systemverilog` | HDL language (default `vhdl`) |
+| `--target quartus\|vivado` | Also scaffold vendor packaging **and** a project (`*_hw.tcl`, `component.xml`, project TCL, SDC/XDC). Repeat or comma-separate |
+| `--pack NAME_OR_DIR` | Scaffold pack: a built-in name (`builtin-minimal` — the default —, `builtin-ipcraft`, `example-*`), a pack directory, or `scaffold_pack:` in the `.ip.yml` |
+| `--quartus-device PART` | Quartus device (default `5CSEBA6U23I7`) |
+| `--vivado-part PART` | Vivado part (default `xc7z020clg484-1`) |
+| `--indent-style spaces\|tab`, `--indent-size N` | Indentation of generated HDL / TCL / XDC / SDC (also works with the classic generator) |
+| `--framework cocotb\|vunit`, `--engine-sim ghdl\|icarus\|verilator\|questa` | Testbench framework / simulator (the `simulation:` block of the `.ip.yml` wins) |
+| `--docs` | Also write the Markdown datasheet `docs/<name>_datasheet.md` |
+| `--out DIR` | Output directory (alias of `--output`/`-o`) |
+| `--no-testbench`, `--dry-run`, `--json` | As for the classic generator |
+
+```bash
+ipcraft generate my_core.ip.yml --lang systemverilog --pack builtin-ipcraft \
+        --target quartus,vivado --out gen/
+ipcraft verify   my_core.ip.yml gen/ --lang systemverilog --pack builtin-ipcraft --target quartus,vivado
+```
+
+`verify` regenerates in memory and exits `1` when `gen/` has stale, missing or orphaned files (files declared
+`managed: false` are exempt). Pass the same flags that produced the directory.
+
+Files that the `.ip.yml` lists with `managed: false` — and files a pack marks `managed: false` — are written only
+when they do not exist yet.
+
+### Scaffold packs
+
+```bash
+ipcraft pack list                         # built-in packs (add --pack-dir DIR for your own)
+ipcraft pack export builtin-ipcraft my-pack/   # copy a built-in pack + the templates it uses for editing
+ipcraft generate core.ip.yml --pack my-pack/ --lang vhdl
+ipcraft preview-template my-pack/top.vhdl.j2 core.ip.yml   # render one template against a core's context
+```
+
+Pack manifests (`scaffold.yml`), the template context contract (v1.4.0) and the Nunjucks-flavoured template syntax are
+identical to the extension's; see the extension documentation on scaffold packs. Templates run on Jinja2 with
+Nunjucks semantics (empty lists are truthy, `null` renders as nothing, `array.push(x)`, `~` concatenates like JavaScript).
+
+---
+
+## `import` -- HDL, `_hw.tcl` and `component.xml` to IP YAML
+
+```bash
+ipcraft import path/to/core.vhd            # VHDL entity -> core.ip.yml (bus interfaces detected from port names)
+ipcraft import path/to/core.sv             # Verilog / SystemVerilog module
+ipcraft import path/to/core_hw.tcl         # Platform Designer component (conditionals, loops, procs and sourced files are resolved)
+ipcraft import path/to/xilinx/component.xml  # Vivado IP-XACT: .ip.yml and .mm.yml are written one level above xilinx/
+```
+
+Options: `--output/--out DIR`, `--vendor`, `--library`, `--version`, `--no-detect-bus`, `--dry-run`, `--force`, `--json`.
+An existing file is never overwritten without `--force`; an import that violates a bus protocol is refused, while
+warnings (values Tcl computes at elaboration time, unresolved widths, ...) are printed. Review the result before generating code.
+
+`ipcraft parse` remains the classic Python importer.
+
+## `instance` -- component instantiation snippet
+
+```bash
+ipcraft instance rtl/fifo.vhd     # u_fifo : entity work.fifo generic map (...) port map (...);
+ipcraft instance rtl/fifo.sv      # fifo #(.DEPTH (DEPTH)) u_fifo (...);
+```
+
+## `migrate` -- upgrade and convert
+
+`ipcraft migrate FILE...` upgrades `.ip.yml` files to the latest format version (`apiVersion: '1.1'`: bus interface
+contracts, e.g. Avalon-MM `read_n` becomes `read` + `portPolarityOverrides`) and converts legacy snake_case keys in
+`.ip.yml` / `.mm.yml` files, preserving comments and hex literals. `--check` only reports (exit 1 if anything would
+change); `--vendor-targets` also rewrites the legacy `vendor:` field to `targets:`.
