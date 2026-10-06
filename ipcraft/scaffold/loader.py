@@ -108,7 +108,7 @@ def read_ip_core_format_version(data: dict) -> Dict[str, Any]:
         return {"ok": True, "version": declared}
     if not isinstance(declared, str):
         return {"ok": False, "message": f"apiVersion must be a quoted string such as '{IP_CORE_FORMAT_VERSION}' "
-                                        f"(found {json.dumps(declared)})."}
+                                        f"(found {json.dumps(int(declared) if isinstance(declared, float) and declared == int(declared) else declared)})."}
     return {"ok": False, "message": f"This file declares apiVersion {declared}, but this IPCraft supports up to "
                                     f"{IP_CORE_FORMAT_VERSION}. Upgrade IPCraft to open it."}
 

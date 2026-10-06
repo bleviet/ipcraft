@@ -500,7 +500,8 @@ def project_memory_maps_for_template(maps: Sequence[dict]) -> List[dict]:
             fields.append({
                 "name": f["name"], "bits": f["bits"], "offset": f["offset"], "bit_offset": f["offset"],
                 "bitOffset": f["offset"], "width": f["width"], "bit_width": f["width"], "bitWidth": f["width"],
-                "access": f.get("access"), "resetValue": f["resetValue"], "reset_value": f["resetValue"],
+                **({"access": f["access"]} if f.get("access") is not None else {}),  # JS `undefined` is omitted
+                "resetValue": f["resetValue"], "reset_value": f["resetValue"],
                 "description": f["description"], "monitorChangeOf": f.get("monitorChangeOf"),
             })
         base = {

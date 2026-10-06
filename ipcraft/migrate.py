@@ -275,7 +275,7 @@ def _read_version(data: dict) -> str:
     if declared in IP_CORE_FORMAT_VERSIONS:
         return declared
     if not isinstance(declared, str):
-        raise ValueError(f"apiVersion must be a quoted string such as '{IP_CORE_FORMAT_VERSION}' (found {declared!r}).")
+        raise ValueError(f"apiVersion must be a quoted string such as '{IP_CORE_FORMAT_VERSION}' (found {int(declared) if isinstance(declared, float) and declared == int(declared) else declared!r}).")
     raise ValueError(f"This file declares apiVersion {declared}, but this IPCraft supports up to "
                      f"{IP_CORE_FORMAT_VERSION}. Upgrade IPCraft to open it.")
 
