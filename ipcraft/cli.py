@@ -803,6 +803,50 @@ def cmd_instance(args):
         print(snippet)
 
 
+def cmd_busdef(args):
+    """Convert IP-XACT bus/abstraction definitions (XML) to IPCraft bus-definition YAML."""
+    import shutil
+
+    from ipcraft.scaffold.importers.busdef_xml import convert_interfaces
+    from ipcraft.scaffold.loader import vivado_interface_cache_dir
+
+    try:
+        if args.busdef_command == "scan-vivado":
+            interfaces_dir = Path(args.install_dir) / "data" / "ip" / "interfaces"
+            if not interfaces_dir.is_dir():
+                err(f"Could not read Vivado interfaces directory at {interfaces_dir}", args)
+            files = convert_interfaces([str(interfaces_dir)], "vivado")
+            out_dir = Path(args.output) if args.output else Path(vivado_interface_cache_dir(args.version))
+            replace = True
+        else:
+            files = convert_interfaces(args.paths, args.source)
+            out_dir = Path(args.output) if args.output else Path(".")
+            replace = False
+        if replace:
+            tmp = out_dir.parent / f".{out_dir.name}.tmp"
+            shutil.rmtree(tmp, ignore_errors=True)
+            tmp.mkdir(parents=True)
+            for name, content in files.items():
+                (tmp / name).write_text(content, encoding="utf-8")
+            shutil.rmtree(out_dir, ignore_errors=True)
+            tmp.rename(out_dir)
+        else:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for name, content in files.items():
+                target = out_dir / name
+                if target.exists() and not args.force:
+                    err(f"Output file already exists: {target}\n  Use --force / -f to overwrite.", args)
+                target.write_text(content, encoding="utf-8")
+        if args.json:
+            print(json.dumps({"success": True, "count": len(files), "outputDir": str(out_dir), "files": sorted(files)}))
+        else:
+            print(f"✓ Converted {len(files)} bus definition(s) into {out_dir}")
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        err(f"Bus definition conversion failed: {e}", args, e)
+
+
 # ---------------------------------------------------------------------------
 # Subcommand: parse
 # ---------------------------------------------------------------------------
@@ -1289,6 +1333,25 @@ def main():
     inst_p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     _add_common_args(inst_p)
     inst_p.set_defaults(func=cmd_instance)
+
+    # ---- busdef ----
+    bd_p = subparsers.add_parser("busdef", help="Convert IP-XACT bus definitions (XML) to bus-definition YAML")
+    bd_sub = bd_p.add_subparsers(dest="busdef_command", required=True)
+    bi = bd_sub.add_parser("import", help="Convert busDefinition/abstractionDefinition XML files or directories")
+    bi.add_argument("paths", nargs="+", metavar="PATH", help="XML files or directories to scan")
+    bi.add_argument("--output", "--out", "-o", help="Output directory (default: current directory)")
+    bi.add_argument("--source", default="workspace", choices=["workspace", "vivado"], help="Provenance recorded in each definition")
+    bi.add_argument("--force", "-f", action="store_true", help="Overwrite existing files")
+    bi.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_common_args(bi)
+    bi.set_defaults(func=cmd_busdef)
+    bs = bd_sub.add_parser("scan-vivado", help="Cache the interface definitions of a Vivado installation (used by generate/verify/import)")
+    bs.add_argument("install_dir", help="Vivado installation directory (contains data/ip/interfaces)")
+    bs.add_argument("--version", help="Cache this scan under a version label (default: the unversioned cache)")
+    bs.add_argument("--output", "--out", "-o", help="Write here instead of the shared IPCraft cache directory")
+    bs.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    _add_common_args(bs)
+    bs.set_defaults(func=cmd_busdef, force=True)
 
     # ---- parse ----
     parse_p = subparsers.add_parser(
