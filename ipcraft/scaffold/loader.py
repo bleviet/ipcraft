@@ -290,12 +290,36 @@ def load_bus_library(input_path: Optional[str] = None, ip_core: Optional[dict] =
         cache_dir = vivado_interface_cache_dir(resolve_vivado_cache_version(os.path.abspath(input_path)))
         if os.path.isdir(cache_dir):
             configured_dirs.append(cache_dir)
+    use_lib = str((ip_core or {}).get("useBusLibrary") or "")
+    local_dir = os.path.abspath(os.path.join(os.path.dirname(input_path), use_lib)) if use_lib and input_path else None
+    # Like the extension, reuse the normalized library until a bus definition file changes.
+    key = (tuple(configured_dirs), local_dir)
+    fingerprint = _bus_files_fingerprint(configured_dirs + ([local_dir] if local_dir else []))
+    cached = _library_cache.get(key)
+    if cached is not None and cached[0] == fingerprint:
+        return cached[1]
     if configured_dirs:
         loads.append(load_from_directories(configured_dirs, "configured"))
-    use_lib = str((ip_core or {}).get("useBusLibrary") or "")
-    if use_lib and input_path:
-        loads.append(load_from_directories([os.path.abspath(os.path.join(os.path.dirname(input_path), use_lib))], "ipLocal"))
-    return normalize_sources(*loads)
+    if local_dir:
+        loads.append(load_from_directories([local_dir], "ipLocal"))
+    library = normalize_sources(*loads)
+    _library_cache[key] = (fingerprint, library)
+    return library
+
+
+_library_cache: Dict[tuple, tuple] = {}
+
+
+def _bus_files_fingerprint(dirs: List[str]) -> tuple:
+    stamp = []
+    for d in dirs:
+        for f in _collect_bus_def_files(d):
+            try:
+                st = os.stat(f)
+                stamp.append((f, st.st_mtime_ns, st.st_size))
+            except OSError:
+                stamp.append((f, None, None))
+    return tuple(stamp)
 
 
 def bus_definitions_for_templates(library: dict) -> Dict[str, dict]:

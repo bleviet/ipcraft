@@ -80,3 +80,19 @@ def test_builtin_pack_manifest_loads():
 
     pack = load_pack(str(BUILTIN_PACKS_DIR / "builtin-ipcraft"))
     assert pack["fullGeneration"] and any(f["target"].endswith("_regs.vhd") for f in pack["files"])
+
+
+def test_bus_library_is_cached_until_a_definition_changes(tmp_path):
+    import os
+    import shutil
+
+    from ipcraft.scaffold.loader import BUS_DEFINITIONS_DIR
+
+    lib_dir = tmp_path / "buses"
+    lib_dir.mkdir()
+    src = next(p for p in sorted(BUS_DEFINITIONS_DIR.iterdir()) if p.suffix == ".yml")
+    shutil.copy(src, lib_dir / "custom.yml")
+    first = load_bus_library(str(tmp_path / "x.ip.yml"), {"useBusLibrary": "buses"})
+    assert load_bus_library(str(tmp_path / "x.ip.yml"), {"useBusLibrary": "buses"}) is first
+    os.utime(lib_dir / "custom.yml", ns=(1, 1))
+    assert load_bus_library(str(tmp_path / "x.ip.yml"), {"useBusLibrary": "buses"}) is not first
