@@ -20,8 +20,26 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `ipcraft import` (VHDL, SystemVerilog, Platform Designer `_hw.tcl`, Vivado `component.xml` → `.ip.yml`/`.mm.yml`),
   `ipcraft instance`, `ipcraft pack list|export`, `ipcraft preview-template`.
 - New dependencies: `jsonschema`, `ruamel.yaml`.
+- **ipcraft-vscode 1.1.0 parity.**
+  - `ipcraft migrate` rewrites dotted bus types (`ipcraft.busif.axi4_lite.1.0`) to their colon VLNV
+    (`ipcraft:busif:axi4_lite:1.0`) and repairs a dangling `memoryMapRef` when the intended map is unambiguous, at
+    any format version; `--check` reports both.
+  - Format-preserving `migrate` writes: only edited lines change (in the extension's style), so untouched flow lists,
+    multi-line scalars and comments survive the `apiVersion` 1.0 → 1.1 upgrade; CRLF line endings are kept. Output
+    is byte-identical to the extension's CLI.
+  - A bus interface whose `memoryMapRef` names a missing memory map blocks scaffold-engine generation
+    (`BUS_MEMORY_MAP_UNKNOWN`) instead of producing a dangling reference in `component.xml`.
+  - Failed bus-contract rules are explained in plain language (interface, current and expected values; warnings say
+    they do not block generation) instead of `<RULE_ID> is not satisfied.`; a blocked `generate` prints each issue.
+  - The normalized bus library is cached per process until a bus definition file changes, so multi-file
+    `migrate`/`validate` runs no longer reload large Vivado interface catalogs for every file.
 
 ### Fixed
+
+- The classic generator accepts colon VLNV bus types (`ipcraft:busif:avalon_mm:1.0`). Before, any colon type fell
+  back to AXI4-Lite, so a migrated Avalon-MM core would have generated the wrong bus wrapper.
+- `ipcraft migrate` prints `Upgraded <file> (N change(s))` for `.mm.yml` files and shows the version for `.ip.yml`
+  files in `--check` mode, like the extension's CLI.
 
 - **[TASK-10] BUG-A: Jinja2 `has_wstrb` scoping** (`bus_axil.vhdl.j2`,
   `ipcore_project_generator.py`)  

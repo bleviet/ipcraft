@@ -412,7 +412,11 @@ Pass the same `--vendor` / `--no-testbench` / `--no-regs` flags you used for `ge
 
 Renames legacy snake_case keys (`address_offset`, `reset_value`, `bit_offset`,
 `memory_maps`, `file_sets`, ...) in `.ip.yml` and `.mm.yml` files to their
-camelCase spelling. Comments and layout are preserved.
+camelCase spelling, rewrites dotted bus types (`ipcraft.busif.axi4_lite.1.0`) to
+their colon VLNV (`ipcraft:busif:axi4_lite:1.0`), and repairs a dangling
+`memoryMapRef` when the intended map is unambiguous. Only the lines it edits change;
+comments, layout, flow lists and CRLF line endings are preserved. See
+[`migrate` -- upgrade and convert](#migrate-upgrade-and-convert) for details.
 
 ```bash
 ipcraft migrate <file>... [--check] [--json]
@@ -499,6 +503,20 @@ contracts, e.g. Avalon-MM `read_n` becomes `read` + `portPolarityOverrides`) and
 `.ip.yml` / `.mm.yml` files, preserving comments and hex literals. `--check` only reports (exit 1 if anything would
 change); `--vendor-targets` also rewrites the legacy `vendor:` field to `targets:`.
 
+At any format version it also:
+
+- rewrites a dotted bus `type` such as `ipcraft.busif.axi4_lite.1.0` (the spelling older ipcraft releases wrote) to
+  its colon VLNV `ipcraft:busif:axi4_lite:1.0` when that VLNV resolves in the active bus library. Both spellings work
+  with the classic generator; the scaffold engine and the extension accept only the colon form;
+- repoints a `memoryMapRef` that names a missing memory map at the only defined (or imported) map, when exactly one
+  map exists and exactly one memory-mapped slave interface has a dangling reference. Otherwise the reference is left
+  alone, and the scaffold engine refuses to generate (`BUS_MEMORY_MAP_UNKNOWN`) instead of writing it into
+  `component.xml`.
+
+Like the extension's **Migrate** command, edits are format-preserving: only the lines that change are rewritten
+(in the extension's style, e.g. `key: value # comment`, `[ a, b ]`), and CRLF line endings are kept. The output is
+byte-identical to `ipcraft migrate` of ipcraft-vscode 1.1.
+
 ## `busdef` -- IP-XACT bus definitions to YAML
 
 ```bash
@@ -513,3 +531,8 @@ Use the output directory with `--bus-library`, or `useBusLibrary:` in an `.ip.ym
 `ipcraft validate core.ip.yml --contracts` checks the file against the JSON schema and the declarative bus contracts
 (port widths, derived widths, mode, polarity overrides, ...) exactly as the extension's editor does, and exits `1`
 on any error. Without `--contracts` the classic Python validators run.
+
+Failed contract rules are explained in plain language, naming the interface and, where known, the current and
+expected values, e.g. `Interface 'm_axis': TDATA width must be a multiple of 8 (currently 12).` Warnings end with
+`This is a recommendation; generation is not blocked.` When the scaffold engine refuses to generate, `generate`
+prints the same messages below the error line.
