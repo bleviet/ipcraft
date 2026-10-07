@@ -522,7 +522,11 @@ def cmd_generate(args):
         # Print the newline that the "Generating..." line left open.
         if not getattr(args, "json", False):
             print()
-        err(f"Generation failed: {e}", args, e)
+        hint = ""
+        if type(e).__name__ == "ParseError" and not _uses_scaffold_engine(args):
+            hint = ("\n  This file uses features of the current IP-core format that the classic generator cannot read."
+                    "\n  Use the pack-driven engine instead, e.g.: --lang vhdl --pack builtin-ipcraft")
+        err(f"Generation failed: {e}{hint}", args, e)
 
     if getattr(args, "watch", False):
         _watch_loop(args, output_base)

@@ -156,7 +156,6 @@ class IpCoreProjectGenerator(
         registers = []
 
         def process_register(reg, base_offset, prefix):
-            current_offset = base_offset + reg.address_offset
             reg_name = reg.name
 
             # Check if it's an array

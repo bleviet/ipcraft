@@ -14,6 +14,14 @@ from .errors import ParseError
 from .protocols import ParserHostContext
 
 
+def _register_extent(reg) -> int:
+    """Byte address just past a register or register array."""
+    if hasattr(reg, "address_offset"):
+        return reg.address_offset + (reg.size // 8)
+    # RegisterArrayDef: base_address + count * stride
+    return reg.base_address + reg.count * reg.stride
+
+
 class MemoryMapParserMixin(ParserHostContext):
     """Mixin implementing memory map parsing and expansion logic."""
 
@@ -144,9 +152,7 @@ class MemoryMapParserMixin(ParserHostContext):
 
                 range_value = block_data.get("range")
                 if range_value is None and registers:
-                    max_offset = max(
-                        reg.address_offset + (reg.size // 8) for reg in registers
-                    )
+                    max_offset = max(_register_extent(reg) for reg in registers)
                     range_value = max(max_offset, 64)
                 elif range_value is None:
                     range_value = 4096

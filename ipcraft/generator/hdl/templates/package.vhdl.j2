@@ -25,8 +25,9 @@ package {{ entity_name }}_pkg is
   type t_reg_id is (
 {% for reg in registers %}
 {% if reg.is_array %}
+{% set outer_last = loop.last %}
 {% for i in range(reg.count) %}
-    REG_{{ reg.name | upper }}_{{ i }}{{ "," if not (loop.last and loop.parent.last) else "" }}  -- addr {{ "0x%02X" | format(reg.offset + (i * reg.stride)) }}
+    REG_{{ reg.name | upper }}_{{ i }}{{ "," if not (loop.last and outer_last) else "" }}  -- addr {{ "0x%02X" | format(reg.offset + (i * reg.stride)) }}
 {% endfor %}
 {% else %}
     REG_{{ reg.name | upper }}{{ "," if not loop.last else "" }}  -- addr {{ "0x%02X" | format(reg.offset) }}

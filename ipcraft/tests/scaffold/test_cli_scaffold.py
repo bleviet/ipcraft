@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 import subprocess
 import sys
@@ -103,3 +104,19 @@ busInterfaces:
 def test_instance_command():
     r = run("instance", str(FIXTURES / "import" / "t2.vhd"))
     assert r.returncode == 0 and r.stdout.startswith("u_avmm_thing : entity work.avmm_thing")
+
+
+def test_classic_generate_handles_register_arrays(tmp_path):
+    import shutil
+
+    from ipcraft.scaffold.packs import RESOURCES_DIR  # noqa: F401  (ensures package import)
+
+    spec = Path(__file__).resolve().parents[3] / "ipcraft-spec" / "examples" / "daq_controller"
+    if not spec.exists():
+        import pytest
+
+        pytest.skip("ipcraft-spec submodule not checked out")
+    shutil.copytree(spec, tmp_path / "daq")
+    r = run("generate", str(tmp_path / "daq" / "daq_controller.ip.yml"), "--output", str(tmp_path / "out"))
+    assert r.returncode == 0, r.stderr
+    assert (tmp_path / "out" / "rtl" / "daq_controller_pkg.vhd").exists()
