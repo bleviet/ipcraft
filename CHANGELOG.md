@@ -6,7 +6,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased] — refactor/ipcraft-improvement-plan
+## [Unreleased]
+
+## [0.2.0] - 2026-10-08
+
+Output-compatible with the ipcraft-vscode 1.1.0 CLI: the pack-driven scaffold engine, `migrate`, importers and
+bus-contract validation produce the same files and messages as the extension's `ipcraft` command.
 
 ### Added
 
