@@ -9,7 +9,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import yaml
 
@@ -326,10 +326,10 @@ def _is_valid_vlnv(value: Any) -> bool:
     return isinstance(value, str) and bool(re.match(r"^[^:\s]+:[^:\s]+:[^:\s]+:[^:\s]+$", value))
 
 
-def check_bus_conformance(ip_core: dict, library: dict) -> dict:
+def check_bus_conformance(ip_core: dict, library: dict, memory_map_names: Optional[Sequence[str]] = None) -> dict:
     bus_interfaces = ip_core.get("busInterfaces") or []
     parameters = ip_core.get("parameters") or []
-    diagnostics = validate_bus_interfaces(bus_interfaces, parameters, library)
+    diagnostics = validate_bus_interfaces(bus_interfaces, parameters, library, memory_map_names)
     unresolved: List[dict] = []
     blocking_unresolved = False
     for idx, bi in enumerate(bus_interfaces):

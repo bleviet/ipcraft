@@ -93,3 +93,23 @@ def test_verify_detects_stale_and_orphan_files(led_project):
     result = run_verify(args, str(out))
     assert not result["success"]
     assert result["staleFiles"] == ["rtl/led_controller_avmm.vhd", "rtl/stray.vhd"]
+
+
+def test_dangling_memory_map_ref_blocks_generation(led_project):
+    ip, out = led_project
+    ip.write_text(ip.read_text().replace("memoryMapRef: LED_AVMM_CSR", "memoryMapRef: MISSING"))
+    res = IpCoreScaffolder().generate_all(str(ip), str(out), {**OPTS})
+    assert not res["success"]
+    assert [i["message"] for i in res["issues"]] == ["Interface 'S_AVMM' references unknown memory map 'MISSING'."]
+
+
+def test_constraint_failures_are_explained(led_project):
+    ip, out = led_project
+    ip.write_text(ip.read_text().replace("      address: 2\n", "      address: 2\n      writedata: 24\n"))
+    res = IpCoreScaffolder().generate_all(str(ip), str(out), {**OPTS})
+    assert not res["success"]
+    # Same messages as the ipcraft-vscode 1.1.0 CLI.
+    assert [i["message"] for i in res["issues"]] == [
+        "Interface 'S_AVMM': writedata width must be a power of two from 8 to 1024 (currently 24).",
+        "Interface 'S_AVMM': ports writedata, readdata must have the same width.",
+    ]

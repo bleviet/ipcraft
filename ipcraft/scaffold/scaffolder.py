@@ -132,14 +132,16 @@ class IpCoreScaffolder:
         output_dir = os.path.abspath(output_dir)
         ip_core = load_ip_core_data(input_path, options.get("sourceText"))
         library = load_bus_library(input_path, ip_core, list(options.get("busLibraryDirs") or []) + self.bus_library_dirs)
-        conformance = check_bus_conformance(ip_core, library)
+        # Resolve memory maps once: shared by the conformance check (memoryMapRef), the template
+        # context (RTL/testbench) and the vendor packaging step (component.xml <spirit:memoryMaps>).
+        resolved_maps = resolve_memory_maps(ip_core, input_path)
+        conformance = check_bus_conformance(ip_core, library, [m["name"] for m in resolved_maps])
         if blocks_generation(conformance):
             return {"success": False, "error": "Generation blocked by bus interface conformance issues.",
                     "issues": conformance["issues"]}
         ip_core_dir = os.path.dirname(input_path)
         bus_type = get_bus_type_for_template(ip_core, library)
         has_mm_slave = has_memory_mapped_consumer_interface(ip_core, library)
-        resolved_maps = resolve_memory_maps(ip_core, input_path)
         context = build_template_context(ip_core, bus_type, input_path, library, resolved_maps)
         context["has_memory_mapped_slave"] = has_mm_slave
         memmap_relpath = resolve_memmap_relpath(ip_core, input_path, output_dir)

@@ -14,6 +14,7 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from . import widthexpr as wx
+from .jsutil import js_to_string
 
 BYTE_LANE_WIDTH = 8
 MAX_SAFE_INTEGER = 2**53 - 1
@@ -481,6 +482,28 @@ def canonicalize_bus_type(type_: Any, library: dict) -> Optional[dict]:
             contract = next((d for d in defs if d["canonicalVlnv"] == alias["canonicalVlnv"]), None)
             return _to_match(contract, "structuredAlias") if contract else None
     return None
+
+
+def dotted_vlnv_to_colon(type_: str) -> Optional[str]:
+    """Map the dotted spelling of the IPCraft Python CLI (``ipcraft.busif.axi4_lite.1.0``) to a colon VLNV.
+
+    Only a migration input: ``canonicalize_bus_type`` stays strict.
+    """
+    trimmed = type_.strip()
+    if ":" in trimmed:
+        return None
+    parts = trimmed.split(".")
+    if len(parts) < 4 or any(not part for part in parts[:3]):
+        return None
+    return f"{parts[0]}:{parts[1]}:{parts[2]}:{'.'.join(parts[3:])}"
+
+
+def canonicalize_dotted_bus_type(type_: Any, library: dict) -> Optional[dict]:
+    """The contract a dotted-spelling type resolves to, if any."""
+    if not isinstance(type_, str):
+        return None
+    colon = dotted_vlnv_to_colon(type_)
+    return canonicalize_bus_type(colon, library) if colon else None
 
 
 def normalize_interface_mode(contract: dict, mode: Any) -> Optional[str]:
@@ -1295,15 +1318,93 @@ def _constraint_path(c: dict, inp: dict) -> list:
     return ["busInterfaces", inp["busIndex"], "type"]
 
 
-def _diagnostic_for(c: dict, inp: dict, state: str, suggested: Optional[float] = None) -> dict:
+def _subject_of(c: dict) -> str:
+    return f"{c['port']} width" if c.get("port") is not None else f"interface property '{c.get('property')}'"
+
+
+def _rule_text(c: dict, verb: str) -> str:
+    kind = c["kind"]
+    n = js_to_string
+    if kind == "range":
+        subject = _subject_of(c)
+        minimum, maximum = c.get("minimum"), c.get("maximum")
+        if minimum is not None and maximum is not None:
+            return f"{subject} {verb} be between {n(minimum)} and {n(maximum)}"
+        return (f"{subject} {verb} be at least {n(minimum)}" if minimum is not None
+                else f"{subject} {verb} be at most {n(maximum)}")
+    if kind == "allowedValues":
+        return f"{_subject_of(c)} {verb} be one of {', '.join(n(v) for v in c['values'])}"
+    if kind == "multipleOf":
+        return f"{_subject_of(c)} {verb} be a multiple of {n(c['value'])}"
+    if kind == "powerOfTwo":
+        minimum, maximum = c.get("minimum"), c.get("maximum")
+        bounds = ""
+        if minimum is not None and maximum is not None:
+            bounds = f" from {n(minimum)} to {n(maximum)}"
+        elif minimum is not None:
+            bounds = f" of at least {n(minimum)}"
+        elif maximum is not None:
+            bounds = f" of at most {n(maximum)}"
+        return f"{_subject_of(c)} {verb} be a power of two{bounds}"
+    if kind == "portWidthsEqual":
+        return f"ports {', '.join(c['ports'])} {verb} have the same width"
+    if kind == "portWidthQuotient":
+        return f"{c['port']} width {verb} equal {c['dividendPort']} width / {n(c['divisor'])}"
+    if kind == "productEqualsPort":
+        return f"{c['port']} width {verb} equal {' * '.join(c['properties'])}"
+    if kind == "portPresenceRequires":
+        return f"port {c['port']} {verb} be accompanied by {', '.join(c['requires'])}"
+    if kind == "propertyRequiredWhenPortPresent":
+        return f"interface property '{c['property']}' {verb} be set when port {c['port']} is present"
+    if kind == "propertyFitsPort":
+        return f"interface property '{c['property']}' {verb} fit in the {c['port']} port width"
+    return "undefined"
+
+
+def describe_constraint(c: dict, interface_name: Any, detail: Optional[str] = None) -> str:
+    """Human-readable text for a constraint that does not declare its own ``message`` (``describeConstraint``)."""
+    is_warning = c["severity"] == "warning"
+    rule = _rule_text(c, "should" if is_warning else "must")
+    suffix = " This is a recommendation; generation is not blocked." if is_warning else ""
+    name = "undefined" if interface_name is None else js_to_string(interface_name)
+    return f"Interface '{name}': {rule}{f' ({detail})' if detail else ''}.{suffix}"
+
+
+_STATE_DETAIL = {
+    "concrete": None,
+    "invalid": "a referenced value is invalid",
+    "unresolved": "a referenced value could not be resolved",
+    "symbolic": "could not be checked for every parameter value",
+}
+_UNSET = object()
+
+
+def _diagnostic_for(c: dict, inp: dict, state: str, suggested: Optional[float] = None, detail: Any = _UNSET) -> dict:
+    if detail is _UNSET:
+        detail = _STATE_DETAIL.get(state)
     d = {
         "code": c["code"], "ruleId": c["ruleId"], "severity": c["severity"], "state": state,
         "interfaceName": inp["busInterface"].get("name"), "path": _constraint_path(c, inp),
-        "message": c.get("message") or f"{c['ruleId']} is not satisfied.",
+        "message": c.get("message") or describe_constraint(c, inp["busInterface"].get("name"), detail),
     }
     if suggested is not None and _is_safe_int(suggested):
         d["suggestedValue"] = _int_if_whole(suggested)
     return d
+
+
+_CURRENT_VALUE_KINDS = {"range", "allowedValues", "multipleOf", "powerOfTwo", "portWidthQuotient", "productEqualsPort"}
+
+
+def _current_value_detail(c: dict, values: Sequence[dict], inp: dict, suggested: Optional[float]) -> Optional[str]:
+    if c["kind"] not in _CURRENT_VALUE_KINDS:
+        return None
+    current = _value_at(values[0] if values else None, inp["parameterContext"]["defaults"])
+    if current is None:
+        return None
+    expected = (f", expected {js_to_string(_int_if_whole(suggested))}"
+                if c["kind"] in ("portWidthQuotient", "productEqualsPort")
+                and suggested is not None and _is_safe_int(suggested) else "")
+    return f"currently {js_to_string(current)}{expected}"
 
 
 def _enumerate_domains(names: Sequence[str], context: dict):
@@ -1338,7 +1439,9 @@ def evaluate_contract_constraints(inp: dict) -> List[dict]:
             continue
         default_result = _evaluate_relation(c, inp, inp["parameterContext"]["defaults"])
         if default_result["valid"] is False:
-            diagnostics.append(_diagnostic_for(c, inp, "concrete", default_result.get("suggestedValue")))
+            diagnostics.append(_diagnostic_for(
+                c, inp, "concrete", default_result.get("suggestedValue"),
+                _current_value_detail(c, values, inp, default_result.get("suggestedValue"))))
         names: List[str] = []
         for v in values:
             if v.get("expression"):
@@ -1367,7 +1470,8 @@ def evaluate_contract_constraints(inp: dict) -> List[dict]:
             continue
         if default_result["valid"] is not False and any(
                 _evaluate_relation(c, inp, combo)["valid"] is False for combo in combos):
-            diagnostics.append(_diagnostic_for(c, inp, "concrete"))
+            diagnostics.append(_diagnostic_for(
+                c, inp, "concrete", None, f"fails for some allowed values of {', '.join(names)}"))
     return diagnostics
 
 
@@ -1405,7 +1509,10 @@ def _linked_override_diagnostic(contract: dict, port: dict, bus_interface: dict,
         "code": c["code"], "ruleId": c["ruleId"], "severity": c["severity"], "state": "invalid",
         "interfaceName": bus_interface.get("name"),
         "path": ["busInterfaces", bus_index, "portWidthOverrides", port["name"]],
-        "message": c.get("message") or f"{c['ruleId']} is not satisfied.",
+        "message": c.get("message") or describe_constraint(
+            c, bus_interface.get("name"),
+            f"{port['name']} width is derived as {js_to_string(expected['value'])}"
+            if expected.get("value") is not None else None),
     }
     if expected.get("value") is not None:
         d["suggestedValue"] = expected["value"]
@@ -1533,7 +1640,9 @@ def resolve_bus_interface(bus_interface: dict, bus_index: int, parameters: Seque
     }
 
 
-def validate_bus_interfaces(bus_interfaces: Sequence[dict], parameters: Sequence[dict], library: dict) -> List[dict]:
+def validate_bus_interfaces(bus_interfaces: Sequence[dict], parameters: Sequence[dict], library: dict,
+                            memory_map_names: Optional[Sequence[str]] = None) -> List[dict]:
+    """Bus contract diagnostics; ``memory_map_names`` (defined/imported maps) enables the memoryMapRef check."""
     diagnostics: List[dict] = []
     for index, bi in enumerate(bus_interfaces):
         resolution = resolve_bus_interface(bi, index, parameters, library)
@@ -1552,6 +1661,14 @@ def validate_bus_interfaces(bus_interfaces: Sequence[dict], parameters: Sequence
                 "state": "invalid", "interfaceName": bi.get("name"),
                 "path": ["busInterfaces", index, "memoryMapRef"],
                 "message": f"Interface '{bi.get('name')}' cannot expose a memory map in its current type and mode.",
+            })
+            continue
+        if memory_map_names is not None and bi["memoryMapRef"] not in memory_map_names:
+            diagnostics.append({
+                "code": "BUS_MEMORY_MAP_UNKNOWN", "ruleId": "BUS_MEMORY_MAP_UNKNOWN", "severity": "error",
+                "state": "invalid", "interfaceName": bi.get("name"),
+                "path": ["busInterfaces", index, "memoryMapRef"],
+                "message": f"Interface '{bi.get('name')}' references unknown memory map '{bi['memoryMapRef']}'.",
             })
     return diagnostics
 

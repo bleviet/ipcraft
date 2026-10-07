@@ -61,7 +61,9 @@ def run_generate(args: Any, output_dir: str, dry_run: bool = False) -> Dict[str,
         opts["dryRun"] = True
     result = IpCoreScaffolder().generate_all(os.path.abspath(args.input), os.path.abspath(output_dir), opts)
     if not result["success"]:
-        raise RuntimeError(result.get("error") or "generation failed")
+        # Like the TS CLI, name each blocking issue after the summary line.
+        messages = [i["message"] for i in result.get("issues") or []]
+        raise RuntimeError("\n".join([result.get("error") or "generation failed", *messages]))
     return result
 
 
