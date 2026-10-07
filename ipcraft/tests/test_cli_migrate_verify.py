@@ -85,3 +85,117 @@ def test_cli_verify_detects_drift(tmp_path):
     (out / "rtl" / "orphan.vhd").write_text("-- stray\n")
     res = _run("verify", ip, str(out), cwd=tmp_path)
     assert res.returncode == 1 and "rtl/orphan.vhd" in res.stderr
+
+
+# Expected texts below are the output of the ipcraft-vscode 1.1.0 CLI (`ipcraft migrate`).
+
+def _library():
+    from ipcraft.scaffold.loader import load_bus_library
+
+    return load_bus_library("x.ip.yml", {})
+
+
+IP_V11 = """\
+vlnv: {vendor: v, library: l, name: n, version: 1.0.0}
+apiVersion: '1.1'
+busInterfaces:
+  - name: s_axi
+    type: ipcraft.busif.axi4_lite.1.0   # dotted
+    mode: slave
+    memoryMapRef: CSR_OLD
+  - name: m_axis
+    type: 'ipcraft.busif.axi_stream.1.0'
+    mode: master
+    useOptionalPorts: [TLAST]
+"""
+
+
+def test_dotted_bus_types_and_dangling_memory_map_ref():
+    res = migrate_ip_core_yaml(IP_V11, _library(), ["CSR"])
+    assert res.changed and res.mutation_count == 3 and res.from_version == res.to_version == "1.1"
+    assert res.text == IP_V11.replace(
+        "type: ipcraft.busif.axi4_lite.1.0   # dotted", "type: ipcraft:busif:axi4_lite:1.0 # dotted").replace(
+        "CSR_OLD", "CSR").replace("'ipcraft.busif.axi_stream.1.0'", "'ipcraft:busif:axi_stream:1.0'")
+
+
+def test_dangling_memory_map_ref_left_alone_when_ambiguous():
+    lib = _library()
+    assert "CSR_OLD" in migrate_ip_core_yaml(IP_V11, lib, ["A", "B"]).text
+    assert "CSR_OLD" in migrate_ip_core_yaml(IP_V11, lib, None).text
+
+
+def test_rename_rerenders_only_the_touched_lines():
+    text = (
+        "name: CSR\n"
+        "address_blocks:\n"
+        "  - name: regs\n"
+        "    base_address: 0x0\n"
+        "    registers:\n"
+        "      - name: CTRL\n"
+        "        address_offset: 0x04\n"
+        "        reset_value: 0x0   # zero\n"
+        "        fields: [{name: EN, bit_offset: 0, bit_width: 1}]\n"
+        "        description: [untouched]\n"
+    )
+    assert migrate_memory_map_yaml(text).text == (
+        "name: CSR\n"
+        "addressBlocks:\n"
+        "  - name: regs\n"
+        "    baseAddress: 0x0\n"
+        "    registers:\n"
+        "      - name: CTRL\n"
+        "        offset: 0x04\n"
+        "        resetValue: 0x0 # zero\n"
+        "        fields: [ { name: EN, offset: 0, width: 1 } ]\n"
+        "        description: [untouched]\n"
+    )
+
+
+def test_version_upgrade_keeps_untouched_formatting():
+    text = (
+        "vlnv: {vendor: v, library: l, name: n, version: 1.0.0}\n"
+        "description: A long plain description that the original author\n"
+        "  wrapped over two lines\n"
+        "parameters:\n"
+        "  - name: W\n"
+        "    value: 8\n"
+        "    allowedValues: [ 8, 16 ]\n"
+        "busInterfaces:\n"
+        "  - name: s0\n"
+        "    type: ipcraft:busif:avalon_mm:1.0\n"
+        "    mode: slave\n"
+        "    useOptionalPorts:\n"
+        "      - read_n        # active low\n"
+        "      - write\n"
+        "    portWidthOverrides: {address: 4}\n"
+    )
+    res = migrate_ip_core_yaml(text, _library())
+    # The lines next to the inserted apiVersion overlap that edit, so TS re-renders them too.
+    assert res.text == (
+        "vlnv: { vendor: v, library: l, name: n, version: 1.0.0 }\n"
+        "apiVersion: '1.1'\n"
+        "description: A long plain description that the original author wrapped over two lines\n"
+        "parameters:\n"
+        "  - name: W\n"
+        "    value: 8\n"
+        "    allowedValues: [ 8, 16 ]\n"
+        "busInterfaces:\n"
+        "  - name: s0\n"
+        "    type: ipcraft:busif:avalon_mm:1.0\n"
+        "    mode: slave\n"
+        "    useOptionalPorts:\n"
+        "      - read\n"
+        "      - write\n"
+        "    portWidthOverrides: {address: 4}\n"
+        "    portPolarityOverrides:\n"
+        "      read: activeLow\n"
+    )
+
+
+def test_cli_migrate_keeps_crlf(tmp_path):
+    f = tmp_path / "x.mm.yml"
+    f.write_bytes(LEGACY_MM.replace("\n", "\r\n").encode())
+    res = _run("migrate", str(f), cwd=tmp_path)
+    assert res.returncode == 0 and res.stdout.startswith(f"Upgraded {f} (6 change(s))")
+    data = f.read_bytes()
+    assert b"addressBlocks:\r\n" in data and b"\n" not in data.replace(b"\r\n", b"")

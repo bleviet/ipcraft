@@ -666,6 +666,7 @@ def cmd_verify(args):
 def cmd_migrate(args):
     """Upgrade .ip.yml files to the latest format and convert legacy snake_case keys."""
     from ipcraft.migrate import migrate_ip_core_yaml, migrate_memory_map_yaml, migrate_vendor_to_targets
+    from ipcraft.scaffold.domain import normalize_memory_map, resolve_memory_map_imports
     from ipcraft.scaffold.loader import load_bus_library
 
     exit_code = 0
@@ -674,7 +675,11 @@ def cmd_migrate(args):
         path = Path(name)
         entry = {"path": name}
         try:
-            text = path.read_text()
+            with open(path, encoding="utf-8", newline="") as fh:
+                raw_text = fh.read()
+            # Migrate LF text and restore CRLF line endings on write, like the TS CLI.
+            crlf = "\r\n" in raw_text
+            text = raw_text.replace("\r\n", "\n")
             is_mm = name.lower().endswith((".mm.yml", ".mm.yaml"))
             notes: list = []
             if is_mm:
@@ -688,13 +693,16 @@ def cmd_migrate(args):
                 if not isinstance(data, dict):
                     raise ValueError("Invalid YAML: must be an object")
                 library = load_bus_library(str(path.resolve()), data)
-                res = migrate_ip_core_yaml(text, library)
+                # A failed import leaves the set of map names unknown, so skip the memoryMapRef repair.
+                resolved, import_errors = resolve_memory_map_imports(data.get("memoryMaps"), str(path.resolve().parent))
+                map_names = None if import_errors else [normalize_memory_map(m)["name"] for m in resolved]
+                res = migrate_ip_core_yaml(text, library, map_names)
                 new_text, changed, from_v, to_v = res.text, res.changed, res.from_version, res.to_version
                 if args.vendor_targets:
                     v_changed, v_text, notes = migrate_vendor_to_targets(new_text)
                     if v_changed:
                         new_text, changed = v_text, True
-            versions = f" ({from_v} -> {to_v}, {res.mutation_count} change(s))" if from_v and from_v != to_v else None
+            versions = f" ({from_v} -> {to_v}, {res.mutation_count} change(s))" if from_v else f" ({res.mutation_count} change(s))"
             if not changed:
                 status = "upToDate"
                 entry.update(version=to_v)
@@ -705,16 +713,17 @@ def cmd_migrate(args):
                 exit_code = 1
                 entry.update(fromVersion=from_v, toVersion=to_v)
                 if not args.json:
-                    print(f"Needs upgrade: {name}" + (f" ({from_v} -> {to_v})" if from_v and from_v != to_v else ""))
+                    print(f"Needs upgrade: {name}" + (f" ({from_v} -> {to_v})" if from_v else ""))
             else:
-                path.write_text(new_text)
+                with open(path, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(new_text.replace("\n", "\r\n") if crlf else new_text)
                 status = "upgraded"
                 entry.update(fromVersion=from_v, toVersion=to_v, mutationCount=res.mutation_count, notes=notes)
                 if not args.json:
-                    if versions:
-                        print(f"Upgraded {name}{versions}")
-                    else:
+                    if from_v and from_v == to_v:
                         print(f"Converted legacy keys in {name} ({res.mutation_count} change(s))")
+                    else:
+                        print(f"Upgraded {name}{versions}")
                     for n in notes:
                         print(f"  {n}")
             entry["status"] = status
