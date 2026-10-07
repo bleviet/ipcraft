@@ -29,6 +29,10 @@ class TestBusTypeMapping:
             ("avmm", "avmm"),
             ("axi4-lite", "axil"),
             ("UNKNOWN", "axil"),  # fallback
+            ("ipcraft.busif.avalon_mm.1.0", "avmm"),
+            # the colon VLNV that `ipcraft migrate` writes for the dotted spelling
+            ("ipcraft:busif:avalon_mm:1.0", "avmm"),
+            ("ipcraft:busif:axi4_lite:1.0", "axil"),
         ],
     )
     def test_bus_type_to_generator_code(self, input_val, expected):

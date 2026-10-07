@@ -105,9 +105,13 @@ def normalize_bus_type_key(raw: str) -> str:
     """Normalize a bus type string to its canonical key (e.g. 'axil' → 'AXI4L').
 
     Handles short-form names (AXI4L), new spec directory keys (AXI4_LITE),
-    and fully qualified dot-separated names (ipcraft.busif.axi4_lite.1.0).
+    and fully qualified names, dot-separated (ipcraft.busif.axi4_lite.1.0) or colon VLNVs
+    (ipcraft:busif:axi4_lite:1.0).
     """
     upper = raw.upper() if isinstance(raw, str) else str(raw).upper()
+    # Colon VLNV (ipcraft:busif:axi4_lite:1.0), the canonical spelling `ipcraft migrate` writes.
+    if upper.count(":") == 3 and upper.replace(":", ".") in _BUS_TYPE_ALIASES:
+        return _BUS_TYPE_ALIASES[upper.replace(":", ".")]
     canonical = _BUS_TYPE_ALIASES.get(upper, upper)
     if upper in _BUS_TYPE_ALIASES and upper != canonical:
         warnings.warn(
